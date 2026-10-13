@@ -27,6 +27,19 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
   each segment through the cable *and* the radio at the same time.
 - **Automatic file splitting** — 8 segments below 500 MB, 16 above, never smaller than 2 MB
   each, interleaved across adapters (segment *i* → adapter *i % n*).
+- **Browser-style tabs** — each network tab has a real address bar with **Back / Forward /
+  Reload / Home** navigation history (like a web browser — navigating to a link starts the
+  download), a home start page with your recent links, `Ctrl+L` to focus the address bar and
+  smart URL normalization (`example.com/file.zip` → `https://example.com/file.zip`).
+- **Clipboard link watcher** — copy a link anywhere and a one-click **⤓ Download** banner
+  appears in the status bar (toggle 📋 in the toolbar).
+- **Bulk actions** — ⏸ pause all, ▶ resume all, ↻ retry failed, 🧹 clear finished — per tab.
+- **Per-download extras** — copy URL, download again (restart), remove from list, and
+  **SHA-256 integrity check** on completed files (hash is copied to the clipboard).
+- **Global speed limiter** — cap the combined throughput of *all* adapters and jobs
+  (settings, KB/s, 0 = unlimited).
+- **Auto shutdown** — toggle ⏻ to shut Windows down once every download has finished
+  (great for big overnight grabs; abort with `shutdown /a`).
 - **Per-network tabs** — a `Combined` tab (uses every active adapter) plus one tab per
   detected adapter; downloads started in a tab use **only** that tab's network(s).
 - **Dark + Light theme** — follows the system theme by default, switchable in the toolbar.
@@ -46,8 +59,8 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
 
 ## Install
 
-Download **`DualNetDownloader-1.0.0-win-x64.exe`** from the
-[Releases page](https://github.com/dualnet-bot/DualNet-Downloader/releases) and run it —
+Download **`DualNetDownloader-1.1.0-win-x64.exe`** from the
+[Releases page](https://github.com/mythos0/DualNet-Downloader/releases) and run it —
 no .NET runtime or installer required.
 
 ## Usage
@@ -57,11 +70,16 @@ no .NET runtime or installer required.
    - **🔌 <Ethernet name>** — downloads use only the Ethernet cable.
    - **📶 <Wi-Fi name>** — downloads use only the Wi-Fi adapter.
    - **🕘 History** — past downloads.
-2. Paste one or more `http(s)://` URLs (one per line is fine) and press **⤓ Download**.
-3. Watch progress, pause/resume anytime, click 📁 to reveal the file.
+2. Type or paste a link into the **address bar** (Enter or **⤓ Download**) — it works just
+   like a browser: Back ◀ / Forward ▶ / Reload ↻ / Home ⌂ navigate through the links you
+   visited. Multiple links (one per line) become multiple downloads.
+3. Watch progress, pause/resume anytime, then open the file ⤢, reveal it 📁, verify its
+   SHA-256 #, or download it again ↻.
 
-The toolbar shows every detected adapter as a chip (name, IP, negotiated link speed) and the
-⚙ button opens settings (download folder, max simultaneous downloads, retry budget).
+The toolbar shows every detected adapter as a chip (name, IP, negotiated link speed), the
+📋 and ⏻ toggles (clipboard watcher / auto shutdown) and the ⚙ button opens settings
+(download folder, max simultaneous downloads, retry budget, speed limit, clipboard watcher,
+auto shutdown).
 
 ## How the dual-network magic works
 
@@ -85,11 +103,11 @@ The toolbar shows every detected adapter as a chip (name, IP, negotiated link sp
 
 ```bash
 # Prerequisite: .NET 8 SDK
-git clone https://github.com/dualnet-bot/DualNet-Downloader.git
+git clone https://github.com/mythos0/DualNet-Downloader.git
 cd DualNet-Downloader
 
 dotnet build                                    # build
-dotnet test                                     # 24 unit + integration + UI tests
+dotnet test                                     # 46 unit + integration + UI tests
 
 # Windows single-file release (also works cross-compiling from Linux/macOS):
 dotnet publish src/DualNet.App -c Release -r win-x64 --self-contained true \
@@ -117,8 +135,9 @@ DualNet-Downloader/
 
 ## Testing
 
-The test suite (24 tests) includes a purpose-built HTTP server with real byte-range support
-and covers: segment planning, file-name resolution, **dual-source-IP downloads verified by
+The test suite (46 tests) includes a purpose-built HTTP server with real byte-range support
+and covers: segment planning, URL normalization, the global speed limiter, browser-style
+address-bar navigation, file-name resolution, **dual-source-IP downloads verified by
 SHA-256**, no-range fallback, pause → close → restore → resume, remote-file-changed
 revalidation, automatic retry on 503s, the concurrency queue, and headless UI smoke tests.
 

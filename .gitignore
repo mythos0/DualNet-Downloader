@@ -9,3 +9,4 @@ publish/
 *.dualnet
 *.dualnet.json
 .DS_Store
+.avalonia-build-tasks/

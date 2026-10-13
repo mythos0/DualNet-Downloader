@@ -32,11 +32,17 @@ public partial class SettingsViewModel : ObservableObject
         DownloadDirectory = AppServices.Settings.DownloadDirectory;
         MaxConcurrent = AppServices.Settings.MaxConcurrentDownloads;
         RetryCount = AppServices.Settings.RetryCount;
+        SpeedLimitKbps = AppServices.Settings.SpeedLimitKbps;
+        ClipboardMonitor = AppServices.Settings.ClipboardMonitor;
+        ShutdownWhenComplete = AppServices.Settings.ShutdownWhenComplete;
     }
 
     [ObservableProperty] private string downloadDirectory = "";
     [ObservableProperty] private double? maxConcurrent = 3;
     [ObservableProperty] private double? retryCount = 5;
+    [ObservableProperty] private double? speedLimitKbps = 0;
+    [ObservableProperty] private bool clipboardMonitor;
+    [ObservableProperty] private bool shutdownWhenComplete;
 
     public void Save()
     {
@@ -44,6 +50,10 @@ public partial class SettingsViewModel : ObservableObject
         s.DownloadDirectory = string.IsNullOrWhiteSpace(DownloadDirectory) ? s.DownloadDirectory : DownloadDirectory.Trim();
         s.MaxConcurrentDownloads = (int)Math.Clamp(MaxConcurrent ?? s.MaxConcurrentDownloads, 1, 10);
         s.RetryCount = (int)Math.Clamp(RetryCount ?? s.RetryCount, 1, 20);
+        s.SpeedLimitKbps = (long)Math.Clamp(SpeedLimitKbps ?? s.SpeedLimitKbps, 0, 1_048_576);
+        s.ClipboardMonitor = ClipboardMonitor;
+        s.ShutdownWhenComplete = ShutdownWhenComplete;
+        AppServices.ApplySpeedLimit();
         AppServices.SaveSettings();
     }
 }

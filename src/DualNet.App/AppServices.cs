@@ -40,7 +40,12 @@ public static class AppServices
 
         RefreshAdapters();
         ApplyTheme(Settings.ThemeMode);
+        ApplySpeedLimit();
     }
+
+    /// <summary>Pushes the user's speed cap (KB/s) into the engine's global limiter.</summary>
+    public static void ApplySpeedLimit() =>
+        GlobalSpeedLimit.SetLimit(Math.Max(0, Settings.SpeedLimitKbps) * 1024);
 
     public static void RefreshAdapters() => Adapters = NetworkAdapterService.GetActiveAdapters();
 

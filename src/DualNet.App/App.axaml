@@ -111,5 +111,52 @@
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <Style Selector="ToggleButton.toolbtn">
+      <Setter Property="Padding" Value="9,7" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="MinWidth" Value="38" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- Browser navigation cluster -->
+    <Style Selector="Button.nav">
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <!-- Compact text buttons (⏸ all / ▶ all / …) -->
+    <Style Selector="Button.mini">
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="MinWidth" Value="0" />
+    </Style>
+    <!-- Rounded pill buttons (recent links on the home page) -->
+    <Style Selector="Button.pill">
+      <Setter Property="Padding" Value="12,5" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="FontSize" Value="11.5" />
+    </Style>
+
+    <!-- Home / start page logo -->
+    <Style Selector="Border.homeLogo">
+      <Setter Property="Width" Value="68" />
+      <Setter Property="Height" Value="68" />
+      <Setter Property="CornerRadius" Value="18" />
+      <Setter Property="Background">
+        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+          <GradientStop Color="#3B82F6" Offset="0" />
+          <GradientStop Color="#22D3EE" Offset="1" />
+        </LinearGradientBrush>
+      </Setter>
+    </Style>
+    <Style Selector="Border.homeLogo TextBlock">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontSize" Value="34" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
   </Application.Styles>
 </Application>

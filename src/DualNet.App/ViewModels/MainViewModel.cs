@@ -17,6 +17,38 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string adaptersSummary = "";
     [ObservableProperty] private string totalSpeedText = "0 B/s";
     [ObservableProperty] private int selectedTabIndex;
+    [ObservableProperty] private bool clipboardMonitor;
+    [ObservableProperty] private bool shutdownWhenComplete;
+    [ObservableProperty] private string? clipboardBannerText;
+    [ObservableProperty] private string shutdownHint = "";
+
+    public bool HasClipboardBanner => ClipboardUrl is not null;
+    public bool ShowShutdownHint => ShutdownHint.Length > 0;
+
+    private string? clipboardUrl;
+    private string _lastClipboardText = "";
+    private bool _shutdownTriggered;
+    private readonly DispatcherTimer _clipboardTimer;
+
+    /// <summary>The link currently detected in the clipboard (banner is shown when non-null).</summary>
+    public string? ClipboardUrl
+    {
+        get => clipboardUrl;
+        set
+        {
+            if (SetProperty(ref clipboardUrl, value))
+                OnPropertyChanged(nameof(HasClipboardBanner));
+        }
+    }
+
+    public DownloadTabViewModel? SelectedTab =>
+        SelectedTabIndex >= 0 && SelectedTabIndex < Tabs.Count ? Tabs[SelectedTabIndex] : null;
+
+    partial void OnClipboardBannerTextChanged(string? value) =>
+        OnPropertyChanged(nameof(HasClipboardBanner));
+
+    partial void OnShutdownHintChanged(string value) =>
+        OnPropertyChanged(nameof(ShowShutdownHint));
 
     private static readonly string[] AdapterColors =
         { "#4F8CFF", "#B388FF", "#2DD4BF", "#F472B6", "#FBBF24", "#A3E635", "#FB923C" };
@@ -37,6 +69,13 @@ public partial class MainViewModel : ObservableObject
         _totalTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background,
             (_, _) => UpdateTotals());
         _totalTimer.IsEnabled = true;
+
+        // Load toggles through fields (not properties) so saving isn't triggered during construction.
+        clipboardMonitor = AppServices.Settings.ClipboardMonitor;
+        shutdownWhenComplete = AppServices.Settings.ShutdownWhenComplete;
+        _clipboardTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(700), DispatcherPriority.Background,
+            (_, _) => CheckClipboard());
+        _clipboardTimer.IsEnabled = true;
 
         AppServices.Manager.JobEnded += OnJobEnded;
         LoadAdapterChips();
@@ -60,8 +99,7 @@ public partial class MainViewModel : ObservableObject
             t.Kind == TabKind.Combined && job.Scope.Label == "All") ??
             Tabs.FirstOrDefault(t => t.Kind == TabKind.SingleAdapter && t.ScopeLabel == job.Scope.Label) ??
             Tabs[0];
-        tab.Items.Insert(0, new DownloadItemViewModel(job));
-        tab.HasNoItems = tab.Items.Count == 0;
+        tab.AddRestoredJob(job);
     }
 
     partial void OnThemeModeChanged(int value)
@@ -69,6 +107,28 @@ public partial class MainViewModel : ObservableObject
         AppServices.ApplyTheme(value);
         AppServices.Settings.ThemeMode = value;
         AppServices.SaveSettings();
+    }
+
+    partial void OnClipboardMonitorChanged(bool value)
+    {
+        AppServices.Settings.ClipboardMonitor = value;
+        AppServices.SaveSettings();
+        if (!value)
+        {
+            ClipboardUrl = null;
+            ClipboardBannerText = null;
+        }
+    }
+
+    partial void OnShutdownWhenCompleteChanged(bool value)
+    {
+        AppServices.Settings.ShutdownWhenComplete = value;
+        AppServices.SaveSettings();
+        if (!value)
+        {
+            _shutdownTriggered = false;
+            ShutdownHint = "";
+        }
     }
 
     private void OnJobEnded(DownloadJob job)
@@ -96,7 +156,103 @@ public partial class MainViewModel : ObservableObject
                         job.Scope.Label == "All" ? "combined" : job.Scope.Label);
                     break;
             }
+
+            MaybeShutdown();
         });
+    }
+
+    // ---- clipboard link watcher ----------------------------------------------------------------
+
+    private async void CheckClipboard()
+    {
+        if (!ClipboardMonitor)
+            return;
+        try
+        {
+            var top = AppServices.MainWindow;
+            if (top?.Clipboard is null) return;
+            var text = await top.Clipboard.GetTextAsync();
+            if (string.IsNullOrWhiteSpace(text) || text == _lastClipboardText)
+                return;
+            _lastClipboardText = text;
+
+            var url = ExtractFirstUrl(text);
+            if (url is null || url == ClipboardUrl)
+                return;
+
+            ClipboardUrl = url;
+            ClipboardBannerText = url.Length > 58 ? url[..55] + "…" : url;
+        }
+        catch { }
+    }
+
+    private static string? ExtractFirstUrl(string text)
+    {
+        foreach (var token in text.Split(new[] { '\r', '\n', ' ', '\t', ';', '"', '\'' },
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            // Only tokens that already carry a scheme — never guess links from plain text.
+            if (!token.Contains("://", StringComparison.Ordinal))
+                continue;
+            if (UrlNormalizer.Normalize(token) is { } normalized &&
+                normalized.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                return normalized;
+        }
+        return null;
+    }
+
+    [RelayCommand]
+    private void GoClipboardUrl()
+    {
+        var url = ClipboardUrl;
+        if (url is null) return;
+
+        var tab = SelectedTab is { IsDownloadTab: true } t ? t : Tabs.FirstOrDefault(x => x.IsDownloadTab);
+        tab?.Navigate(url);
+        ClipboardUrl = null;
+        ClipboardBannerText = null;
+    }
+
+    [RelayCommand]
+    private void DismissClipboard()
+    {
+        ClipboardUrl = null;
+        ClipboardBannerText = null;
+    }
+
+    // ---- auto shutdown ---------------------------------------------------------------------------
+
+    private void MaybeShutdown()
+    {
+        if (!ShutdownWhenComplete || _shutdownTriggered)
+            return;
+
+        var jobs = AppServices.Manager.Jobs;
+        if (jobs.Count == 0)
+            return;
+        bool busy = jobs.Any(j => j.Status is DownloadStatus.Downloading or DownloadStatus.Preparing
+                                                or DownloadStatus.Queued or DownloadStatus.Pausing);
+        if (busy)
+            return;
+
+        _shutdownTriggered = true;
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo("shutdown", "/s /t 30") { CreateNoWindow = true });
+                ShutdownHint = "All downloads finished — Windows shuts down in 30 s (cancel: shutdown /a)";
+            }
+            catch
+            {
+                ShutdownHint = "All downloads finished (auto shutdown failed)";
+            }
+        }
+        else
+        {
+            ShutdownHint = "All downloads finished (auto shutdown is Windows-only)";
+        }
     }
 
     private void LoadAdapterChips()
@@ -148,6 +304,7 @@ public partial class MainViewModel : ObservableObject
     public void Shutdown()
     {
         _totalTimer.IsEnabled = false;
+        _clipboardTimer.IsEnabled = false;
         foreach (var tab in Tabs)
             tab.Shutdown();
         AppServices.Manager.PauseAll();

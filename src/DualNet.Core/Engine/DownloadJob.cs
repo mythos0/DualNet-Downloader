@@ -414,6 +414,10 @@ public sealed class DownloadJob : IDisposable
                         int read;
                         while ((read = await stream.ReadAsync(buffer, attemptCts.Token).ConfigureAwait(false)) > 0)
                         {
+                            // Honor the global speed cap (shared across all jobs/adapters) before writing.
+                            await GlobalSpeedLimit.AcquireAsync(read, ct).ConfigureAwait(false);
+                            attemptCts.CancelAfter(Options.StallTimeoutMs);   // throttling is not a stall
+
                             await fs.WriteAsync(buffer.AsMemory(0, read), attemptCts.Token).ConfigureAwait(false);
                             done += read;
                             progressedThisAttempt += read;
@@ -519,6 +523,10 @@ public sealed class DownloadJob : IDisposable
                     int read;
                     while ((read = await stream.ReadAsync(buffer, attemptCts.Token).ConfigureAwait(false)) > 0)
                     {
+                        // Honor the global speed cap (shared across all jobs/adapters) before writing.
+                        await GlobalSpeedLimit.AcquireAsync(read, ct).ConfigureAwait(false);
+                        attemptCts.CancelAfter(Options.StallTimeoutMs);   // throttling is not a stall
+
                         await fs.WriteAsync(buffer.AsMemory(0, read), attemptCts.Token).ConfigureAwait(false);
                         done += read;
                         segment.Written = done;

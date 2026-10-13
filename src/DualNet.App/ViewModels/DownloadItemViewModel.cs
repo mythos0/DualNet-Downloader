@@ -8,7 +8,7 @@ using DualNet.Core.Models;
 
 namespace DualNet.App.ViewModels;
 
-/// <summary>UI wrapper around a DownloadJob with pause/resume/cancel/open actions.</summary>
+/// <summary>UI wrapper around a DownloadJob with pause/resume/cancel/copy/restart/hash actions.</summary>
 public partial class DownloadItemViewModel : ObservableObject
 {
     private readonly DownloadJob _job;
@@ -20,6 +20,12 @@ public partial class DownloadItemViewModel : ObservableObject
         _job.StatusChanged += OnJobStatus;
         Refresh();
     }
+
+    /// <summary>The item wants a fresh re-download of its URL (keeps tab/scope context).</summary>
+    public event Action<DownloadItemViewModel>? RestartRequested;
+
+    /// <summary>The item wants to disappear from the list (terminal state only).</summary>
+    public event Action<DownloadItemViewModel>? RemoveRequested;
 
     public DownloadJob Job => _job;
     public string Url => _job.Url;
@@ -39,6 +45,16 @@ public partial class DownloadItemViewModel : ObservableObject
     [ObservableProperty] private bool isCompleted;
     [ObservableProperty] private bool isActive;
     [ObservableProperty] private double speedBps;
+    [ObservableProperty] private bool canRestart;
+    [ObservableProperty] private bool canRemove;
+    [ObservableProperty] private bool canVerifyHash;
+    [ObservableProperty] private string hashText = "";
+    [ObservableProperty] private bool isHashing;
+
+    public bool HasHashText => !string.IsNullOrEmpty(HashText) && !IsHashing;
+
+    partial void OnHashTextChanged(string value) => OnPropertyChanged(nameof(HasHashText));
+    partial void OnIsHashingChanged(bool value) => OnPropertyChanged(nameof(HasHashText));
 
     private void OnJobProgress(DownloadJob job, long received, long total, double speed) =>
         Dispatcher.UIThread.Post(Refresh);
@@ -66,6 +82,9 @@ public partial class DownloadItemViewModel : ObservableObject
         CanPause = _job.Status is DownloadStatus.Downloading or DownloadStatus.Preparing or DownloadStatus.Queued;
         CanResume = _job.Status is DownloadStatus.Paused or DownloadStatus.Failed or DownloadStatus.Queued;
         CanCancel = _job.Status is not (DownloadStatus.Completed or DownloadStatus.Canceled);
+        CanRestart = _job.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Canceled;
+        CanRemove = CanRestart;
+        CanVerifyHash = _job.Status == DownloadStatus.Completed;
 
         StatusText = _job.Status switch
         {
@@ -98,6 +117,54 @@ public partial class DownloadItemViewModel : ObservableObject
 
     [RelayCommand]
     private void Resume() => _job.Start();
+
+    [RelayCommand]
+    private void Restart() => RestartRequested?.Invoke(this);
+
+    [RelayCommand]
+    private void Remove() => RemoveRequested?.Invoke(this);
+
+    [RelayCommand]
+    private async Task CopyUrl()
+    {
+        try
+        {
+            var clip = AppServices.MainWindow?.Clipboard;
+            if (clip is not null)
+                await clip.SetTextAsync(_job.Url);
+        }
+        catch { }
+    }
+
+    /// <summary>Computes the file's SHA-256 and copies it to the clipboard (integrity check).</summary>
+    [RelayCommand]
+    private async Task VerifyHash()
+    {
+        if (IsHashing || !File.Exists(_job.FilePath)) return;
+        IsHashing = true;
+        HashText = "";
+        try
+        {
+            await Task.Run(async () =>
+            {
+                await using var fs = File.OpenRead(_job.FilePath);
+                var hash = await System.Security.Cryptography.SHA256.HashDataAsync(fs);
+                HashText = Convert.ToHexString(hash).ToLowerInvariant();
+            });
+
+            var clip = AppServices.MainWindow?.Clipboard;
+            if (clip is not null)
+                await clip.SetTextAsync(HashText);
+        }
+        catch
+        {
+            HashText = "";
+        }
+        finally
+        {
+            IsHashing = false;
+        }
+    }
 
     [RelayCommand]
     private void Cancel()

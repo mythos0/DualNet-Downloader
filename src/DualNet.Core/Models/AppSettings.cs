@@ -15,4 +15,13 @@ public sealed class AppSettings
 
     /// <summary>Reserved for per-download segment override (0 = auto by size).</summary>
     public int MaxSegmentsOverride { get; set; } = 0;
+
+    /// <summary>Global speed cap in KB/s applied to the combined traffic of all adapters (0 = unlimited).</summary>
+    public long SpeedLimitKbps { get; set; } = 0;
+
+    /// <summary>Watch the clipboard for copied download links and surface a one-click banner.</summary>
+    public bool ClipboardMonitor { get; set; }
+
+    /// <summary>Shut the computer down when every download has reached a terminal state.</summary>
+    public bool ShutdownWhenComplete { get; set; }
 }

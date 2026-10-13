@@ -13,7 +13,7 @@
 
     <!-- ================= Header ================= -->
     <Border Grid.Row="0" Classes="toolbar">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
           <Border Classes="logo">
             <TextBlock Text="⇊" />
@@ -49,16 +49,23 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <ComboBox Grid.Column="3" SelectedIndex="{Binding ThemeMode}" MinWidth="112"
+        <ToggleButton Grid.Column="3" Classes="toolbtn" Content="📋" Margin="0,0,8,0"
+                      IsChecked="{Binding ClipboardMonitor}"
+                      ToolTip.Tip="Watch the clipboard for copied download links" />
+        <ToggleButton Grid.Column="4" Classes="toolbtn" Content="⏻" Margin="0,0,8,0"
+                      IsChecked="{Binding ShutdownWhenComplete}"
+                      ToolTip.Tip="Shut the PC down when all downloads finish" />
+
+        <ComboBox Grid.Column="5" SelectedIndex="{Binding ThemeMode}" MinWidth="112"
                   VerticalAlignment="Center" Margin="0,0,8,0" ToolTip.Tip="Theme">
           <ComboBoxItem Content="System theme" />
           <ComboBoxItem Content="Dark" />
           <ComboBoxItem Content="Light" />
         </ComboBox>
 
-        <Button Grid.Column="4" Classes="toolbtn" Content="↻" Margin="0,0,8,0"
+        <Button Grid.Column="6" Classes="toolbtn" Content="↻" Margin="0,0,8,0"
                 Command="{Binding RefreshNetworksCommand}" ToolTip.Tip="Re-scan network adapters" />
-        <Button Grid.Column="5" Classes="toolbtn" Content="⚙" Click="OnOpenSettings"
+        <Button Grid.Column="7" Classes="toolbtn" Content="⚙" Click="OnOpenSettings"
                 ToolTip.Tip="Settings" />
       </Grid>
     </Border>
@@ -85,12 +92,29 @@
 
     <!-- ================= Status bar ================= -->
     <Border Grid.Row="2" Classes="statusbar" Margin="0,10,0,0">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="{Binding AdaptersSummary}" Classes="hint" VerticalAlignment="Center" />
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+      <Grid ColumnDefinitions="*,Auto,Auto">
+        <TextBlock Text="{Binding AdaptersSummary}" Classes="hint" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" />
+
+        <!-- Clipboard link banner -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                    IsVisible="{Binding HasClipboardBanner}" Margin="0,0,16,0">
+          <TextBlock Text="📋" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ClipboardBannerText}" Classes="hint" VerticalAlignment="Center"
+                     MaxWidth="360" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="A download link was copied to the clipboard" />
+          <Button Classes="accent" Padding="12,4" Content="⤓ Download"
+                  Command="{Binding GoClipboardUrlCommand}" ToolTip.Tip="Download the copied link in the current tab" />
+          <Button Classes="toolbtn" Padding="8,4" Content="✕" MinWidth="0"
+                  Command="{Binding DismissClipboardCommand}" ToolTip.Tip="Dismiss" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+          <TextBlock Text="{Binding ShutdownHint}" Classes="error" VerticalAlignment="Center"
+                     IsVisible="{Binding ShowShutdownHint}" MaxWidth="430" TextWrapping="Wrap" />
           <TextBlock Text="total speed:" Classes="hint" />
           <TextBlock Text="{Binding TotalSpeedText}" FontWeight="Bold" FontSize="13" />
-          <TextBlock Text="v1.0.0" Classes="hint" />
+          <TextBlock Text="v1.1.0" Classes="hint" />
         </StackPanel>
       </Grid>
     </Border>

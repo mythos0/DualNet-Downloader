@@ -25,6 +25,18 @@
     <NumericUpDown Minimum="1" Maximum="20" Increment="1"
                    Value="{Binding RetryCount}" />
 
+    <TextBlock Text="Speed limit — KB/s, combined for all adapters (0 = unlimited)" Classes="section" />
+    <NumericUpDown Minimum="0" Maximum="1048576" Increment="128"
+                   Value="{Binding SpeedLimitKbps}"
+                   ToolTip.Tip="Caps the total download throughput of every job and adapter" />
+
+    <CheckBox Content="Watch the clipboard for copied download links"
+              IsChecked="{Binding ClipboardMonitor}"
+              ToolTip.Tip="Shows a one-click banner whenever a download link is copied" />
+    <CheckBox Content="Shut the computer down when all downloads finish"
+              IsChecked="{Binding ShutdownWhenComplete}"
+              ToolTip.Tip="Useful for large overnight downloads" />
+
     <TextBlock Text="Segment split is automatic: 8 parts below 500 MB, 16 parts above — interleaved across your Ethernet and Wi-Fi adapters."
                Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0" />
 
