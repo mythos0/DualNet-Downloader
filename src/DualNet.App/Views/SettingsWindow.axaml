@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:DualNet.App.ViewModels"
+        x:Class="DualNet.App.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        x:CompileBindings="True"
+        Title="DualNet — Settings"
+        Width="500" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+  <StackPanel Margin="20" Spacing="12">
+    <TextBlock Text="Settings" FontWeight="Bold" FontSize="17" />
+
+    <TextBlock Text="Download folder" Classes="section" />
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBox Text="{Binding DownloadDirectory}" />
+      <Button Grid.Column="1" Content="Browse…" Classes="toolbtn" Margin="8,0,0,0" Click="OnBrowse" />
+    </Grid>
+
+    <TextBlock Text="Maximum simultaneous downloads" Classes="section" />
+    <NumericUpDown Minimum="1" Maximum="10" Increment="1"
+                   Value="{Binding MaxConcurrent}" />
+
+    <TextBlock Text="Retries per segment (auto-retry on network hiccups)" Classes="section" />
+    <NumericUpDown Minimum="1" Maximum="20" Increment="1"
+                   Value="{Binding RetryCount}" />
+
+    <TextBlock Text="Segment split is automatic: 8 parts below 500 MB, 16 parts above — interleaved across your Ethernet and Wi-Fi adapters."
+               Classes="hint" TextWrapping="Wrap" Margin="0,4,0,0" />
+
+    <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,10,0,0">
+      <Button Content="Cancel" Classes="toolbtn" Click="OnCancel" />
+      <Button Content="Save" Classes="accent" Click="OnSave" />
+    </StackPanel>
+  </StackPanel>
+</Window>

@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DualNet.App.ViewModels"
+             xmlns:controls="using:DualNet.App.Controls"
+             x:Class="DualNet.App.Views.DownloadTabView"
+             x:DataType="vm:DownloadTabViewModel"
+             x:CompileBindings="True">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- URL bar / history toolbar -->
+    <Border Grid.Row="0" Classes="urlbar" IsVisible="{Binding IsDownloadTab}">
+      <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto">
+        <TextBox Grid.Row="0" Grid.Column="0"
+                 Watermark="Paste file URL (https://…) — one or more links, each becomes a download"
+                 Text="{Binding UrlInput}" />
+        <Button Grid.Row="0" Grid.Column="1" Classes="toolbtn" Content="Paste"
+                Command="{Binding PasteFromClipboardCommand}" Margin="8,0,0,0" />
+        <Button Grid.Row="0" Grid.Column="2" Classes="accent" Content="⤓ Download"
+                Command="{Binding AddFromInputCommand}" Margin="8,0,0,0" />
+
+        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal"
+                    Spacing="10" Margin="2,6,0,0">
+          <TextBlock Text="{Binding ScopeHint}" Classes="hint" />
+          <TextBlock Text="{Binding InputError}" Classes="error" IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- History toolbar -->
+    <Border Grid.Row="0" Classes="urlbar" IsVisible="{Binding IsHistoryTab}">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="Completed and failed downloads are recorded here."
+                   Classes="hint" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Classes="toolbtn" Content="Clear history"
+                Command="{Binding ClearHistoryCommand}" />
+      </Grid>
+    </Border>
+
+    <!-- Content -->
+    <ScrollViewer Grid.Row="1">
+      <Panel>
+        <TextBlock Classes="empty"
+                   Text="Nothing here yet — paste a URL above to start a download."
+                   IsVisible="{Binding HasNoItems}" />
+
+        <!-- Download cards -->
+        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsDownloadTab}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DownloadItemViewModel">
+              <Border Classes="card" Margin="0,0,0,8">
+                <Grid ColumnDefinitions="46,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                  <Border Grid.RowSpan="3" Width="36" Height="36" CornerRadius="9"
+                          Background="#1422D3EE" VerticalAlignment="Top">
+                    <TextBlock Text="{Binding StatusGlyph}" FontSize="19" FontWeight="Bold"
+                               Foreground="#22D3EE"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+
+                  <Grid Grid.Column="1" Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Url}" />
+                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" Classes="dim"
+                               Margin="10,0,0,0" VerticalAlignment="Center" />
+                  </Grid>
+
+                  <ProgressBar Grid.Column="1" Grid.Row="1"
+                               Value="{Binding ProgressPercent}" Maximum="100"
+                               IsIndeterminate="{Binding IsIndeterminate}"
+                               Height="6" CornerRadius="3" Margin="0,7,0,0" />
+
+                  <Grid Grid.Column="1" Grid.Row="2" ColumnDefinitions="*,Auto,Auto"
+                        Margin="0,6,0,0">
+                    <TextBlock Text="{Binding ProgressText}" Classes="hint" />
+                    <TextBlock Grid.Column="1" Text="{Binding SpeedText}" Classes="hint"
+                               FontWeight="SemiBold" Margin="0,0,14,0" />
+                    <TextBlock Grid.Column="2" Text="{Binding ErrorMessage}"
+                               Classes="error" IsVisible="{Binding HasError}"
+                               TextTrimming="CharacterEllipsis" MaxWidth="430" />
+                  </Grid>
+
+                  <StackPanel Grid.Column="2" Grid.RowSpan="3" Orientation="Horizontal"
+                              Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
+                    <Button Classes="toolbtn" Content="⏸" IsVisible="{Binding CanPause}"
+                            Command="{Binding PauseCommand}" ToolTip.Tip="Pause" />
+                    <Button Classes="toolbtn" Content="▶" IsVisible="{Binding CanResume}"
+                            Command="{Binding ResumeCommand}" ToolTip.Tip="Start / Resume" />
+                    <Button Classes="toolbtn" Content="✕" IsVisible="{Binding CanCancel}"
+                            Command="{Binding CancelCommand}" ToolTip.Tip="Cancel and delete partial file" />
+                    <Button Classes="toolbtn" Content="⤢" IsVisible="{Binding IsCompleted}"
+                            Command="{Binding OpenFileCommand}" ToolTip.Tip="Open file" />
+                    <Button Classes="toolbtn" Content="📁"
+                            Command="{Binding OpenFolderCommand}" ToolTip.Tip="Show in folder" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- History rows -->
+        <ItemsControl ItemsSource="{Binding HistoryEntries}" IsVisible="{Binding IsHistoryTab}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:HistoryItemViewModel">
+              <Border Classes="card" Margin="0,0,0,8">
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                  <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip.Tip="{Binding Entry.Url}" />
+                  <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="12"
+                             FontWeight="SemiBold" Foreground="{Binding StatusBrush}"
+                             Margin="10,0,0,0" />
+                  <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Spacing="12"
+                              Margin="0,5,0,0">
+                    <TextBlock Text="{Binding SizeText}" Classes="hint" />
+                    <TextBlock Text="{Binding Scope}" Classes="hint" />
+                    <TextBlock Text="{Binding WhenText}" Classes="hint" />
+                    <TextBlock Text="{Binding Message}" Classes="error"
+                               IsVisible="{Binding HasMessage}"
+                               TextTrimming="CharacterEllipsis" MaxWidth="480" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Panel>
+    </ScrollViewer>
+
+    <!-- Per-tab speed graph -->
+    <Border Grid.Row="2" Classes="graphbar" IsVisible="{Binding IsDownloadTab}">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+          <TextBlock Text="{Binding TabSpeedText}" FontWeight="Bold" FontSize="14" />
+          <TextBlock Text="tab speed" Classes="hint" />
+        </StackPanel>
+        <controls:SpeedGraph Grid.Column="1" Height="46" Margin="16,0,0,0" x:Name="Graph" />
+        <TextBlock Grid.Column="2" Text="{Binding ItemSummaryText}" Classes="hint"
+                   VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

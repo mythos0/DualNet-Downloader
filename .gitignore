@@ -1,0 +1,11 @@
+bin/
+obj/
+out/
+publish/
+*.user
+*.suo
+.vs/
+.idea/
+*.dualnet
+*.dualnet.json
+.DS_Store

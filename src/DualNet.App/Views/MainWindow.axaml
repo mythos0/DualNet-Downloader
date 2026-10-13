@@ -1,0 +1,98 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:DualNet.App.ViewModels"
+        xmlns:views="using:DualNet.App.Views"
+        x:Class="DualNet.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        x:CompileBindings="True"
+        Title="DualNet Downloader — Ethernet + Wi-Fi combined"
+        Width="1140" Height="740" MinWidth="900" MinHeight="580"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- ================= Header ================= -->
+    <Border Grid.Row="0" Classes="toolbar">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
+          <Border Classes="logo">
+            <TextBlock Text="⇊" />
+          </Border>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="DualNet Downloader" FontWeight="Bold" FontSize="16" />
+            <TextBlock Text="Ethernet + Wi-Fi combined downloading" Classes="hint" />
+          </StackPanel>
+        </StackPanel>
+
+        <ItemsControl Grid.Column="2" ItemsSource="{Binding Adapters}" Margin="0,0,14,0"
+                      VerticalAlignment="Center">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="8" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:AdapterChipViewModel">
+              <Border Classes="chip" ToolTip.Tip="{Binding Tooltip}">
+                <StackPanel Orientation="Horizontal" Spacing="7">
+                  <Ellipse Width="9" Height="9" Fill="{Binding DotBrush}" VerticalAlignment="Center" />
+                  <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" />
+                      <TextBlock Text="{Binding TypeName}" Classes="hint" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding IPv4Address}" Classes="hint" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ComboBox Grid.Column="3" SelectedIndex="{Binding ThemeMode}" MinWidth="112"
+                  VerticalAlignment="Center" Margin="0,0,8,0" ToolTip.Tip="Theme">
+          <ComboBoxItem Content="System theme" />
+          <ComboBoxItem Content="Dark" />
+          <ComboBoxItem Content="Light" />
+        </ComboBox>
+
+        <Button Grid.Column="4" Classes="toolbtn" Content="↻" Margin="0,0,8,0"
+                Command="{Binding RefreshNetworksCommand}" ToolTip.Tip="Re-scan network adapters" />
+        <Button Grid.Column="5" Classes="toolbtn" Content="⚙" Click="OnOpenSettings"
+                ToolTip.Tip="Settings" />
+      </Grid>
+    </Border>
+
+    <!-- ================= Tabs ================= -->
+    <TabControl Grid.Row="1" ItemsSource="{Binding Tabs}"
+                SelectedIndex="{Binding SelectedTabIndex}" Margin="12,10,12,0">
+      <TabControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:DownloadTabViewModel">
+          <StackPanel Orientation="Horizontal" Spacing="9">
+            <TextBlock Text="{Binding Glyph}" FontSize="14" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding TabSpeedText}" Classes="hint" VerticalAlignment="Center"
+                       IsVisible="{Binding IsDownloadTab}" />
+          </StackPanel>
+        </DataTemplate>
+      </TabControl.ItemTemplate>
+      <TabControl.ContentTemplate>
+        <DataTemplate x:DataType="vm:DownloadTabViewModel">
+          <views:DownloadTabView />
+        </DataTemplate>
+      </TabControl.ContentTemplate>
+    </TabControl>
+
+    <!-- ================= Status bar ================= -->
+    <Border Grid.Row="2" Classes="statusbar" Margin="0,10,0,0">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="{Binding AdaptersSummary}" Classes="hint" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+          <TextBlock Text="total speed:" Classes="hint" />
+          <TextBlock Text="{Binding TotalSpeedText}" FontWeight="Bold" FontSize="13" />
+          <TextBlock Text="v1.0.0" Classes="hint" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
