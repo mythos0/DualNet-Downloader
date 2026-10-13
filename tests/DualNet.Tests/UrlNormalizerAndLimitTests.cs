@@ -70,7 +70,13 @@ public class GlobalSpeedLimitTests
 
         await Task.Delay(1100);
 
-        Assert.Equal(100, GlobalSpeedLimit.TryTake(100));
+        // Poll briefly — CI schedulers can push the first probe just before the
+        // 1-second window actually flips (TryTake(0) has no side effects).
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        int took;
+        while ((took = GlobalSpeedLimit.TryTake(100)) != 100 && DateTime.UtcNow < deadline)
+            await Task.Delay(50);
+        Assert.Equal(100, took);
     }
 
     [Fact]

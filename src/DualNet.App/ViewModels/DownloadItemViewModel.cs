@@ -18,8 +18,12 @@ public partial class DownloadItemViewModel : ObservableObject
         _job = job;
         _job.ProgressChanged += OnJobProgress;
         _job.StatusChanged += OnJobStatus;
+        _job.DiagnosticEvent += OnJobDiagnostic;
         Refresh();
     }
+
+    private void OnJobDiagnostic(DownloadJob job, string kind, string message) =>
+        Dispatcher.UIThread.Post(() => Diagnostic?.Invoke(kind, message));
 
     /// <summary>The item wants a fresh re-download of its URL (keeps tab/scope context).</summary>
     public event Action<DownloadItemViewModel>? RestartRequested;
@@ -50,6 +54,13 @@ public partial class DownloadItemViewModel : ObservableObject
     [ObservableProperty] private bool canVerifyHash;
     [ObservableProperty] private string hashText = "";
     [ObservableProperty] private bool isHashing;
+    [ObservableProperty] private string categoryGlyph = "⬇";
+    [ObservableProperty] private string categoryLabel = "";
+    [ObservableProperty] private string etaText = "";
+    [ObservableProperty] private bool canMoveInQueue;
+
+    /// <summary>Engine diagnostics (range fallback, resume reset…) for telemetry/toasts.</summary>
+    public event Action<string, string>? Diagnostic;
 
     public bool HasHashText => !string.IsNullOrEmpty(HashText) && !IsHashing;
 
@@ -78,6 +89,12 @@ public partial class DownloadItemViewModel : ObservableObject
         ErrorMessage = _job.StatusMessage;
         IsCompleted = _job.Status == DownloadStatus.Completed;
         IsActive = _job.Status is DownloadStatus.Downloading or DownloadStatus.Preparing;
+
+        var category = DownloadCategory.Of(FileName);
+        CategoryGlyph = DownloadCategory.Glyph(category);
+        CategoryLabel = DownloadCategory.Label(category);
+        EtaText = ComputeEta();
+        CanMoveInQueue = _job.Status == DownloadStatus.Queued;
 
         CanPause = _job.Status is DownloadStatus.Downloading or DownloadStatus.Preparing or DownloadStatus.Queued;
         CanResume = _job.Status is DownloadStatus.Paused or DownloadStatus.Failed or DownloadStatus.Queued;
@@ -112,6 +129,17 @@ public partial class DownloadItemViewModel : ObservableObject
         };
     }
 
+    private string ComputeEta()
+    {
+        if (_job.Status != DownloadStatus.Downloading || _job.TotalBytes <= 0 || SpeedBps <= 0)
+            return "";
+        var seconds = (_job.TotalBytes - _job.ReceivedBytes) / SpeedBps;
+        if (seconds < 0) return "";
+        if (seconds < 60) return $"≈ {(int)seconds}s left";
+        if (seconds < 3600) return $"≈ {(int)(seconds / 60)} min left";
+        return $"≈ {(int)(seconds / 3600)} h {(int)(seconds % 3600 / 60)} min left";
+    }
+
     [RelayCommand]
     private void Pause() => _job.Pause();
 
@@ -123,6 +151,12 @@ public partial class DownloadItemViewModel : ObservableObject
 
     [RelayCommand]
     private void Remove() => RemoveRequested?.Invoke(this);
+
+    [RelayCommand]
+    private void MoveUp() => AppServices.Manager.MoveInQueue(_job, -1);
+
+    [RelayCommand]
+    private void MoveDown() => AppServices.Manager.MoveInQueue(_job, +1);
 
     [RelayCommand]
     private async Task CopyUrl()

@@ -20,6 +20,11 @@ public sealed class RangeTestServer : IDisposable
     public bool ServeWithoutRanges { get; set; }
     public int ChunkDelayMs { get; set; }          // artificial latency per 64KB chunk
     public int FailFirstRequests;                  // simulate flaky server: abort N requests
+    public bool IgnoreRangeOnSegmentRequests;      // 206 for the 0-0 probe, 200 for real ranges
+    public bool OmitContentRange;                  // 206 but without the Content-Range header
+    public bool IgnoreRangeOnResume;               // 200 for range requests with start > 0
+    public bool StallRequests;                     // accept connections but never respond
+    public int FailFirstSegmentRequests;           // 503 the first N range requests with start > 0
     private int _servedRequests;
     public IReadOnlyCollection<string> SeenRemoteAddresses => _seenRemoteAddresses.ToList();
     private readonly ConcurrentBag<string> _seenRemoteAddresses = new();
@@ -70,7 +75,7 @@ public sealed class RangeTestServer : IDisposable
         }
     }
 
-    private Task Handle(HttpListenerContext ctx)
+    private async Task Handle(HttpListenerContext ctx)
     {
         var ct = _cts.Token;
         try
@@ -90,7 +95,7 @@ public sealed class RangeTestServer : IDisposable
                     ctx.Response.Close();
                 }
                 catch { }
-                return Task.CompletedTask;
+                return;
             }
 
             var response = ctx.Response;
@@ -104,6 +109,29 @@ public sealed class RangeTestServer : IDisposable
             // Only honor ranges when explicitly enabled.
             string? rangeHeader = ServeWithoutRanges ? null : ctx.Request.Headers["Range"];
 
+            long rangeStart = -1;
+            if (!string.IsNullOrEmpty(rangeHeader) && rangeHeader.StartsWith("bytes="))
+            {
+                var spec = HttpUtility.UrlDecode(rangeHeader["bytes=".Length..]);
+                var dash = spec.IndexOf('-');
+                rangeStart = long.Parse(spec[..dash]);
+            }
+
+            if (StallRequests)
+            {
+                RequestLog.Enqueue($"#{_servedRequests} remote={ctx.Request.RemoteEndPoint} range={rangeHeader} -> STALL");
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                }
+                catch (OperationCanceledException) { }
+                finally
+                {
+                    try { ctx.Response.Abort(); } catch { }
+                }
+                return;
+            }
+
             if (!string.IsNullOrEmpty(rangeHeader) && rangeHeader.StartsWith("bytes="))
             {
                 var spec = HttpUtility.UrlDecode(rangeHeader["bytes=".Length..]);
@@ -111,19 +139,40 @@ public sealed class RangeTestServer : IDisposable
                 long start = long.Parse(spec[..dash]);
                 long end = dash == spec.Length - 1 ? total - 1 : Math.Min(long.Parse(spec[(dash + 1)..]), total - 1);
 
-                bool etagMatches = ctx.Request.Headers["If-Range"] is null ||
-                                   ctx.Request.Headers["If-Range"] == ETag;
-
-                if (start <= end && etagMatches)
+                // Fault injection: segments (start > 0) misbehave, probe (0-0) still succeeds.
+                if (start > 0 && (IgnoreRangeOnSegmentRequests || IgnoreRangeOnResume))
+                    rangeHeader = null;   // fall through to the 200 full-body branch
+                else if (start > 0 && FailFirstSegmentRequests > 0)
                 {
-                    long count = end - start + 1;
-                    response.StatusCode = 206;
-                    response.Headers["Content-Range"] = $"bytes {start}-{end}/{total}";
-                    response.ContentLength64 = count;
-                    RequestLog.Enqueue($"#{_servedRequests} remote={ctx.Request.RemoteEndPoint} range={rangeHeader} -> 206 bytes={count}");
-                    using var body = response.OutputStream;
-                    CopySlice(start, count, body, ct);
-                    return Task.CompletedTask;
+                    Interlocked.Decrement(ref FailFirstSegmentRequests);
+                    RequestLog.Enqueue($"#{_servedRequests} remote={ctx.Request.RemoteEndPoint} range={rangeHeader} -> 503 (segment fault)");
+                    try
+                    {
+                        ctx.Response.StatusCode = 503;
+                        ctx.Response.ContentLength64 = 0;
+                        ctx.Response.Close();
+                    }
+                    catch { }
+                    return;
+                }
+
+                if (rangeHeader is not null && start <= end)
+                {
+                    bool etagMatches = ctx.Request.Headers["If-Range"] is null ||
+                                       ctx.Request.Headers["If-Range"] == ETag;
+
+                    if (etagMatches)
+                    {
+                        long count = end - start + 1;
+                        response.StatusCode = 206;
+                        if (!OmitContentRange)
+                            response.Headers["Content-Range"] = $"bytes {start}-{end}/{total}";
+                        response.ContentLength64 = count;
+                        RequestLog.Enqueue($"#{_servedRequests} remote={ctx.Request.RemoteEndPoint} range={rangeHeader} -> 206 bytes={count}");
+                        using var body = response.OutputStream;
+                        CopySlice(start, count, body, ct);
+                        return;
+                    }
                 }
                 // If-Range mismatch or bad range -> fall through to 200 full body (standard behavior)
             }
@@ -142,7 +191,7 @@ public sealed class RangeTestServer : IDisposable
         {
             try { ctx.Response.Abort(); } catch { }
         }
-        return Task.CompletedTask;
+        return;
     }
 
     private void CopySlice(long start, long count, Stream output, CancellationToken ct)

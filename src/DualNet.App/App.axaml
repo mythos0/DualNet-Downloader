@@ -3,24 +3,114 @@
              x:Class="DualNet.App.App"
              RequestedThemeVariant="Default">
 
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+
+        <!-- ============ Dark palette ============ -->
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="DnBgBrush" Color="#0A1120" />
+          <SolidColorBrush x:Key="DnCardBrush" Color="#111B2F" />
+          <SolidColorBrush x:Key="DnCardHoverBrush" Color="#16223B" />
+          <SolidColorBrush x:Key="DnStrokeBrush" Color="#1F2C48" />
+          <SolidColorBrush x:Key="DnFieldBrush" Color="#0C1526" />
+          <SolidColorBrush x:Key="DnTabBrush" Color="#0F1830" />
+          <SolidColorBrush x:Key="DnTabSelectedBrush" Color="#1B2B4D" />
+          <SolidColorBrush x:Key="DnAccentSoftBrush" Color="#143B82F6" />
+          <SolidColorBrush x:Key="DnOkBrush" Color="#34D399" />
+          <SolidColorBrush x:Key="DnWarnBrush" Color="#FBBF24" />
+          <SolidColorBrush x:Key="DnDangerBrush" Color="#F87171" />
+        </ResourceDictionary>
+
+        <!-- ============ Light palette ============ -->
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="DnBgBrush" Color="#EDF2FB" />
+          <SolidColorBrush x:Key="DnCardBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="DnCardHoverBrush" Color="#F4F8FF" />
+          <SolidColorBrush x:Key="DnStrokeBrush" Color="#DCE4F3" />
+          <SolidColorBrush x:Key="DnFieldBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="DnTabBrush" Color="#E4EBF8" />
+          <SolidColorBrush x:Key="DnTabSelectedBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="DnAccentSoftBrush" Color="#143B82F6" />
+          <SolidColorBrush x:Key="DnOkBrush" Color="#059669" />
+          <SolidColorBrush x:Key="DnWarnBrush" Color="#B45309" />
+          <SolidColorBrush x:Key="DnDangerBrush" Color="#DC2626" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- Shared accent gradient -->
+      <LinearGradientBrush x:Key="DnAccentGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Color="#3B82F6" Offset="0" />
+        <GradientStop Color="#22D3EE" Offset="1" />
+      </LinearGradientBrush>
+    </ResourceDictionary>
+  </Application.Resources>
+
   <Application.Styles>
     <FluentTheme />
 
-    <!-- Header -->
-    <Style Selector="Border.toolbar">
+    <!-- ================= Surfaces ================= -->
+    <Style Selector="Border.dnToolbar">
       <Setter Property="Padding" Value="16,12" />
-      <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+      <Setter Property="Background" Value="{DynamicResource DnCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
     </Style>
+    <Style Selector="Border.dnStatusBar">
+      <Setter Property="Padding" Value="18,10" />
+      <Setter Property="Background" Value="{DynamicResource DnCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Padding" Value="16,13" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Background" Value="{DynamicResource DnCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.card:pointerover">
+      <Setter Property="Background" Value="{DynamicResource DnCardHoverBrush}" />
+    </Style>
+    <Style Selector="Border.chip">
+      <Setter Property="Padding" Value="11,6" />
+      <Setter Property="CornerRadius" Value="15" />
+      <Setter Property="Background" Value="{DynamicResource DnCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.urlbar">
+      <Setter Property="Padding" Value="10" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Background" Value="{DynamicResource DnCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Margin" Value="0,4,0,10" />
+      <Setter Property="BoxShadow" Value="0 2 10 0 #14000000" />
+    </Style>
+    <Style Selector="Border.graphbar">
+      <Setter Property="Padding" Value="14,10" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Background" Value="{DynamicResource DnCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Margin" Value="0,10,0,0" />
+    </Style>
+    <Style Selector="Border.speedChip">
+      <Setter Property="Padding" Value="10,5" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource DnTabBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- ================= Logo ================= -->
     <Style Selector="Border.logo">
       <Setter Property="Width" Value="40" />
       <Setter Property="Height" Value="40" />
-      <Setter Property="CornerRadius" Value="11" />
-      <Setter Property="Background">
-        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-          <GradientStop Color="#3B82F6" Offset="0" />
-          <GradientStop Color="#22D3EE" Offset="1" />
-        </LinearGradientBrush>
-      </Setter>
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource DnAccentGradient}" />
+      <Setter Property="BoxShadow" Value="0 3 12 0 #333B82F6" />
     </Style>
     <Style Selector="Border.logo TextBlock">
       <Setter Property="Foreground" Value="White" />
@@ -29,47 +119,22 @@
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-
-    <!-- Cards & chips -->
-    <Style Selector="Border.card">
-      <Setter Property="Padding" Value="14,12" />
-      <Setter Property="CornerRadius" Value="10" />
-      <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-      <Setter Property="BorderThickness" Value="1" />
+    <Style Selector="Border.homeLogo">
+      <Setter Property="Width" Value="76" />
+      <Setter Property="Height" Value="76" />
+      <Setter Property="CornerRadius" Value="22" />
+      <Setter Property="Background" Value="{DynamicResource DnAccentGradient}" />
+      <Setter Property="BoxShadow" Value="0 6 22 0 #403B82F6" />
     </Style>
-    <Style Selector="Border.chip">
-      <Setter Property="Padding" Value="11,6" />
-      <Setter Property="CornerRadius" Value="15" />
-      <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-      <Setter Property="BorderThickness" Value="1" />
+    <Style Selector="Border.homeLogo TextBlock">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontSize" Value="38" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <Style Selector="Border.urlbar">
-      <Setter Property="Padding" Value="12" />
-      <Setter Property="CornerRadius" Value="10" />
-      <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="Margin" Value="0,4,0,10" />
-    </Style>
-    <Style Selector="Border.statusbar">
-      <Setter Property="Padding" Value="16,9" />
-      <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-      <Setter Property="BorderThickness" Value="0,1,0,0" />
-    </Style>
-    <Style Selector="Border.graphbar">
-      <Setter Property="Padding" Value="14,9" />
-      <Setter Property="CornerRadius" Value="10" />
-      <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="Margin" Value="0,8,0,0" />
-    </Style>
 
-    <!-- Typography helpers -->
+    <!-- ================= Typography ================= -->
     <Style Selector="TextBlock.dim">
       <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
       <Setter Property="FontSize" Value="12" />
@@ -79,8 +144,18 @@
       <Setter Property="FontSize" Value="11.5" />
     </Style>
     <Style Selector="TextBlock.error">
-      <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DnDangerBrush}" />
       <Setter Property="FontSize" Value="11.5" />
+    </Style>
+    <Style Selector="TextBlock.ok">
+      <Setter Property="Foreground" Value="{DynamicResource DnOkBrush}" />
+      <Setter Property="FontSize" Value="11.5" />
+    </Style>
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Margin" Value="0,14,0,6" />
+      <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
     </Style>
     <Style Selector="TextBlock.empty">
       <Setter Property="HorizontalAlignment" Value="Center" />
@@ -88,75 +163,105 @@
       <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
       <Setter Property="FontSize" Value="13.5" />
     </Style>
-    <Style Selector="TextBlock.section">
+
+    <!-- ================= Buttons ================= -->
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="{DynamicResource DnAccentGradient}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="18,9" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="FontSize" Value="13" />
-      <Setter Property="Margin" Value="0,4,0,8" />
-    </Style>
-
-    <!-- Buttons -->
-    <Style Selector="Button.accent">
-      <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-      <Setter Property="Foreground" Value="White" />
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="Padding" Value="16,8" />
-      <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <Style Selector="Button.accent:pointerover">
+      <Setter Property="Opacity" Value="0.88" />
+    </Style>
     <Style Selector="Button.toolbtn">
       <Setter Property="Padding" Value="9,7" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="9" />
       <Setter Property="MinWidth" Value="38" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="ToggleButton.toolbtn">
       <Setter Property="Padding" Value="9,7" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="9" />
       <Setter Property="MinWidth" Value="38" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-
-    <!-- Browser navigation cluster -->
     <Style Selector="Button.nav">
-      <Setter Property="Padding" Value="10,7" />
-      <Setter Property="CornerRadius" Value="8" />
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="MinWidth" Value="40" />
     </Style>
-    <!-- Compact text buttons (⏸ all / ▶ all / …) -->
     <Style Selector="Button.mini">
-      <Setter Property="Padding" Value="8,4" />
-      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Padding" Value="9,5" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="FontSize" Value="11.5" />
       <Setter Property="MinWidth" Value="0" />
     </Style>
-    <!-- Rounded pill buttons (recent links on the home page) -->
     <Style Selector="Button.pill">
-      <Setter Property="Padding" Value="12,5" />
-      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Padding" Value="13,6" />
+      <Setter Property="CornerRadius" Value="15" />
       <Setter Property="FontSize" Value="11.5" />
     </Style>
 
-    <!-- Home / start page logo -->
-    <Style Selector="Border.homeLogo">
-      <Setter Property="Width" Value="68" />
-      <Setter Property="Height" Value="68" />
-      <Setter Property="CornerRadius" Value="18" />
-      <Setter Property="Background">
-        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-          <GradientStop Color="#3B82F6" Offset="0" />
-          <GradientStop Color="#22D3EE" Offset="1" />
-        </LinearGradientBrush>
+    <!-- ================= Address bar ================= -->
+    <Style Selector="TextBox.address">
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Background" Value="{DynamicResource DnFieldBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="14,11" />
+      <Setter Property="FontSize" Value="13.5" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox.address:focus /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="#3B82F6" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+
+    <!-- ================= Pill tabs ================= -->
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border x:Name="PART_Root" CornerRadius="11" Background="{DynamicResource DnTabBrush}"
+                  Padding="14,7" VerticalAlignment="Stretch">
+            <ContentPresenter x:Name="PART_ContentPresenter"
+                              Content="{TemplateBinding Header}"
+                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                              VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
       </Setter>
     </Style>
-    <Style Selector="Border.homeLogo TextBlock">
+    <Style Selector="TabItem:pointerover /template/ Border#PART_Root">
+      <Setter Property="Background" Value="{DynamicResource DnTabSelectedBrush}" />
+    </Style>
+    <Style Selector="TabItem:selected /template/ Border#PART_Root">
+      <Setter Property="Background" Value="{DynamicResource DnAccentGradient}" />
+      <Setter Property="BoxShadow" Value="0 3 10 0 #303B82F6" />
+    </Style>
+    <Style Selector="TabItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="TextElement.Foreground" Value="White" />
+    </Style>
+    <Style Selector="TabItem:selected TextBlock">
       <Setter Property="Foreground" Value="White" />
-      <Setter Property="FontSize" Value="34" />
-      <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="HorizontalAlignment" Value="Center" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- ================= Progress ================= -->
+    <Style Selector="ProgressBar">
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="MinHeight" Value="7" />
+      <Setter Property="Foreground" Value="{DynamicResource DnAccentGradient}" />
     </Style>
   </Application.Styles>
 </Application>

@@ -6,15 +6,19 @@
         x:DataType="vm:MainViewModel"
         x:CompileBindings="True"
         Title="DualNet Downloader — Ethernet + Wi-Fi combined"
-        Width="1140" Height="740" MinWidth="900" MinHeight="580"
+        Background="{DynamicResource DnBgBrush}"
+        TransparencyLevelHint="AcrylicBlur"
+        Width="1200" Height="780" MinWidth="780" MinHeight="600"
         WindowStartupLocation="CenterScreen">
 
   <Grid RowDefinitions="Auto,*,Auto">
 
     <!-- ================= Header ================= -->
-    <Border Grid.Row="0" Classes="toolbar">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
+    <Border Grid.Row="0" Classes="dnToolbar">
+      <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+
+        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="12"
+                    VerticalAlignment="Center">
           <Border Classes="logo">
             <TextBlock Text="⇊" />
           </Border>
@@ -24,8 +28,8 @@
           </StackPanel>
         </StackPanel>
 
-        <ItemsControl Grid.Column="2" ItemsSource="{Binding Adapters}" Margin="0,0,14,0"
-                      VerticalAlignment="Center">
+        <ItemsControl Grid.Row="0" Grid.Column="1" ItemsSource="{Binding Adapters}"
+                      HorizontalAlignment="Center" Margin="12,0" VerticalAlignment="Center">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Orientation="Horizontal" Spacing="8" />
@@ -33,53 +37,78 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:AdapterChipViewModel">
-              <Border Classes="chip" ToolTip.Tip="{Binding Tooltip}">
-                <StackPanel Orientation="Horizontal" Spacing="7">
-                  <Ellipse Width="9" Height="9" Fill="{Binding DotBrush}" VerticalAlignment="Center" />
-                  <StackPanel Orientation="Vertical" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" />
-                      <TextBlock Text="{Binding TypeName}" Classes="hint" />
+              <Panel>
+                <Border Classes="chip" ToolTip.Tip="{Binding Tooltip}" Opacity="{Binding ChipOpacity}">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <Ellipse Width="9" Height="9" Fill="{Binding DotBrush}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="＋" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"
+                                   IsVisible="{Binding IsManual}"
+                                   ToolTip.Tip="Manual network provider" />
+                        <TextBlock Text="⦸" FontSize="11" VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsOnline}" />
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{Binding TypeName}" Classes="hint" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding IPv4Address}" Classes="hint" />
+                        <TextBlock Text="offline" Classes="hint" IsVisible="{Binding !IsOnline}" />
+                        <TextBlock Text="{Binding SpeedText}" Classes="hint"
+                                   IsVisible="{Binding HasSpeed}" />
+                      </StackPanel>
                     </StackPanel>
-                    <TextBlock Text="{Binding IPv4Address}" Classes="hint" />
                   </StackPanel>
-                </StackPanel>
-              </Border>
+                </Border>
+                <Button Content="✕" Padding="3,0" MinWidth="16" MinHeight="16" Height="16"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-4,0"
+                        Background="Transparent" BorderThickness="0" FontSize="9"
+                        IsVisible="{Binding IsManual}" Command="{Binding RemoveProviderCommand}"
+                        ToolTip.Tip="Remove this manual provider" />
+              </Panel>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <ToggleButton Grid.Column="3" Classes="toolbtn" Content="📋" Margin="0,0,8,0"
-                      IsChecked="{Binding ClipboardMonitor}"
-                      ToolTip.Tip="Watch the clipboard for copied download links" />
-        <ToggleButton Grid.Column="4" Classes="toolbtn" Content="⏻" Margin="0,0,8,0"
-                      IsChecked="{Binding ShutdownWhenComplete}"
-                      ToolTip.Tip="Shut the PC down when all downloads finish" />
+        <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                    VerticalAlignment="Center">
+          <ToggleButton Classes="toolbtn" Content="📋" IsChecked="{Binding ClipboardMonitor}"
+                        ToolTip.Tip="Watch the clipboard for copied download links" />
+          <ToggleButton Classes="toolbtn" Content="⏻" IsChecked="{Binding ShutdownWhenComplete}"
+                        ToolTip.Tip="Shut the PC down when all downloads finish" />
+          <ComboBox SelectedIndex="{Binding ThemeMode}" MinWidth="116"
+                    VerticalAlignment="Center" ToolTip.Tip="Theme">
+            <ComboBoxItem Content="System theme" />
+            <ComboBoxItem Content="Dark" />
+            <ComboBoxItem Content="Light" />
+          </ComboBox>
+          <Button Classes="toolbtn" Content="＋"
+                  Command="{Binding AddManualProviderCommand}"
+                  ToolTip.Tip="Add a manual network provider — for networks the auto-scan misses (VPN, virtual NIC, multi-IP…)" />
+          <Button Classes="toolbtn" Content="↻"
+                  Command="{Binding RefreshNetworksCommand}"
+                  ToolTip.Tip="Rescan networks now — also happens automatically every 5 s" />
+          <Button Classes="toolbtn" Content="⚙" Click="OnOpenSettings" ToolTip.Tip="Settings" />
+        </StackPanel>
 
-        <ComboBox Grid.Column="5" SelectedIndex="{Binding ThemeMode}" MinWidth="112"
-                  VerticalAlignment="Center" Margin="0,0,8,0" ToolTip.Tip="Theme">
-          <ComboBoxItem Content="System theme" />
-          <ComboBoxItem Content="Dark" />
-          <ComboBoxItem Content="Light" />
-        </ComboBox>
-
-        <Button Grid.Column="6" Classes="toolbtn" Content="↻" Margin="0,0,8,0"
-                Command="{Binding RefreshNetworksCommand}" ToolTip.Tip="Re-scan network adapters" />
-        <Button Grid.Column="7" Classes="toolbtn" Content="⚙" Click="OnOpenSettings"
-                ToolTip.Tip="Settings" />
+        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                   Text="{Binding AdaptersSummary}" Classes="hint" Margin="0,7,0,0"
+                   TextTrimming="CharacterEllipsis" />
       </Grid>
     </Border>
 
     <!-- ================= Tabs ================= -->
     <TabControl Grid.Row="1" ItemsSource="{Binding Tabs}"
-                SelectedIndex="{Binding SelectedTabIndex}" Margin="12,10,12,0">
+                SelectedIndex="{Binding SelectedTabIndex}" Margin="16,12,16,0"
+                Background="Transparent">
       <TabControl.ItemTemplate>
         <DataTemplate x:DataType="vm:DownloadTabViewModel">
-          <StackPanel Orientation="Horizontal" Spacing="9">
+          <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="{Binding Glyph}" FontSize="14" VerticalAlignment="Center" />
             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding TabSpeedText}" Classes="hint" VerticalAlignment="Center"
-                       IsVisible="{Binding IsDownloadTab}" />
+            <TextBlock Text="{Binding TabSpeedText}" FontSize="11" VerticalAlignment="Center"
+                       IsVisible="{Binding IsDownloadTab}"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
           </StackPanel>
         </DataTemplate>
       </TabControl.ItemTemplate>
@@ -91,30 +120,38 @@
     </TabControl>
 
     <!-- ================= Status bar ================= -->
-    <Border Grid.Row="2" Classes="statusbar" Margin="0,10,0,0">
-      <Grid ColumnDefinitions="*,Auto,Auto">
-        <TextBlock Text="{Binding AdaptersSummary}" Classes="hint" VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" />
+    <Border Grid.Row="2" Classes="dnStatusBar" Margin="0,12,0,0">
+      <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+          <TextBlock Text="{Binding ScheduleStatus}" Classes="ok"
+                     IsVisible="{Binding ShowScheduleStatus}" MaxWidth="360"
+                     TextTrimming="CharacterEllipsis" />
+          <TextBlock Text="{Binding ShutdownHint}" Classes="error"
+                     IsVisible="{Binding ShowShutdownHint}" MaxWidth="430"
+                     TextWrapping="Wrap" />
+        </StackPanel>
 
         <!-- Clipboard link banner -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
                     IsVisible="{Binding HasClipboardBanner}" Margin="0,0,16,0">
           <TextBlock Text="📋" VerticalAlignment="Center" />
           <TextBlock Text="{Binding ClipboardBannerText}" Classes="hint" VerticalAlignment="Center"
-                     MaxWidth="360" TextTrimming="CharacterEllipsis"
+                     MaxWidth="340" TextTrimming="CharacterEllipsis"
                      ToolTip.Tip="A download link was copied to the clipboard" />
-          <Button Classes="accent" Padding="12,4" Content="⤓ Download"
-                  Command="{Binding GoClipboardUrlCommand}" ToolTip.Tip="Download the copied link in the current tab" />
+          <Button Classes="accent" Padding="12,5" FontSize="12" Content="⤓ Download"
+                  Command="{Binding GoClipboardUrlCommand}"
+                  ToolTip.Tip="Download the copied link in the current tab" />
           <Button Classes="toolbtn" Padding="8,4" Content="✕" MinWidth="0"
                   Command="{Binding DismissClipboardCommand}" ToolTip.Tip="Dismiss" />
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
-          <TextBlock Text="{Binding ShutdownHint}" Classes="error" VerticalAlignment="Center"
-                     IsVisible="{Binding ShowShutdownHint}" MaxWidth="430" TextWrapping="Wrap" />
-          <TextBlock Text="total speed:" Classes="hint" />
-          <TextBlock Text="{Binding TotalSpeedText}" FontWeight="Bold" FontSize="13" />
-          <TextBlock Text="v1.1.0" Classes="hint" />
+          <Button Classes="mini" Content="⬇ export history" Command="{Binding ExportHistoryCommand}"
+                  ToolTip.Tip="Save all history entries as CSV into the download folder" />
+          <TextBlock Text="total:" Classes="hint" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding TotalSpeedText}" FontWeight="Bold" FontSize="13"
+                     VerticalAlignment="Center" />
+          <TextBlock Text="v1.2.0" Classes="hint" VerticalAlignment="Center" />
         </StackPanel>
       </Grid>
     </Border>

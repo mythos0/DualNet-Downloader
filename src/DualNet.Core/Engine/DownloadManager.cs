@@ -6,13 +6,13 @@ using DualNet.Core.Models;
 namespace DualNet.Core.Engine;
 
 /// <summary>
-/// Owns all downloads, enforces the max-concurrent-downloads queue, and recovers
-/// unfinished downloads after an app restart.
+/// Owns all downloads, enforces the max-concurrent-downloads queue, supports reordering the
+/// waiting queue (IDM-style priority), and recovers unfinished downloads after an app restart.
 /// </summary>
 public sealed class DownloadManager : IDisposable
 {
     private readonly ConcurrentDictionary<string, DownloadJob> _jobs = new();
-    private readonly ConcurrentQueue<DownloadJob> _queued = new();
+    private readonly List<DownloadJob> _queued = new();   // guarded by _startLock
     private readonly object _startLock = new();
     private int _active;
     private bool _disposed;
@@ -33,7 +33,16 @@ public sealed class DownloadManager : IDisposable
                                    string targetDirectory, DownloadOptions? options = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var job = new DownloadJob(url, bindAddresses, scope, targetDirectory,
+
+        // IDM-style categories: optional per-type sub-folder (Video/, Compressed/, …).
+        var category = DownloadCategory.Of(FileNameGuesser.FromUrl(url));
+        var folder = DownloadCategory.Subfolder(category, Settings().OrganizeByCategory);
+        var finalDirectory = folder is null
+            ? targetDirectory
+            : Path.Combine(targetDirectory, folder);
+        Directory.CreateDirectory(finalDirectory);
+
+        var job = new DownloadJob(url, bindAddresses, scope, finalDirectory,
             options ?? OptionsFromSettings());
         _jobs[job.Id] = job;
         job.StatusChanged += OnJobStatusChanged;
@@ -59,8 +68,8 @@ public sealed class DownloadManager : IDisposable
                 job.Start();
                 return;
             }
+            _queued.Add(job);
         }
-        _queued.Enqueue(job);
         if (job.Status == DownloadStatus.Queued)
             return; // stays queued; shown in UI as "Queued"
     }
@@ -90,14 +99,42 @@ public sealed class DownloadManager : IDisposable
             {
                 if (_active >= Math.Max(1, Settings().MaxConcurrentDownloads))
                     return;
-                while (_queued.TryDequeue(out var candidate))
+                for (int i = 0; i < _queued.Count; i++)
                 {
-                    if (candidate.Status == DownloadStatus.Queued) { next = candidate; break; }
+                    if (_queued[i].Status == DownloadStatus.Queued)
+                    {
+                        next = _queued[i];
+                        _queued.RemoveAt(i);
+                        break;
+                    }
                 }
                 if (next is null) return;
                 _active++;
             }
             next.Start();
+        }
+    }
+
+    /// <summary>Snapshot of the waiting queue in start order.</summary>
+    public IReadOnlyList<DownloadJob> QueuedJobsSnapshot()
+    {
+        lock (_startLock)
+            return _queued.ToList();
+    }
+
+    /// <summary>Moves a queued job up (-1) or down (+1) in the waiting queue.</summary>
+    public bool MoveInQueue(DownloadJob job, int delta)
+    {
+        lock (_startLock)
+        {
+            int index = _queued.FindIndex(q => q.Id == job.Id && q.Status == DownloadStatus.Queued);
+            if (index < 0) return false;
+            int target = Math.Clamp(index + delta, 0, _queued.Count - 1);
+            if (target == index) return false;
+            var item = _queued[index];
+            _queued.RemoveAt(index);
+            _queued.Insert(target, item);
+            return true;
         }
     }
 

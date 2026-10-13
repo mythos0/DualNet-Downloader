@@ -41,6 +41,19 @@ public static class FileNameGuesser
         return name;
     }
 
+    /// <summary>Derives a safe file name from a URL alone (no server headers available yet).</summary>
+    public static string FromUrl(string url)
+    {
+        try
+        {
+            return FromResponse(null, new Uri(url));
+        }
+        catch
+        {
+            return $"download_{DateTime.Now:yyyyMMdd_HHmmss}";
+        }
+    }
+
     public static string Sanitize(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "";

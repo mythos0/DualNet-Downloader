@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform;
 using DualNet.App.Views;
 
 namespace DualNet.App;
@@ -23,6 +25,7 @@ public partial class App : Application
             SentrySetup.TrackAppStart();
 
             desktop.MainWindow = new MainWindow();
+            SetupTrayIcon(desktop.MainWindow);
             desktop.ShutdownRequested += (_, _) =>
             {
                 AppServices.Manager.PauseAll();
@@ -32,5 +35,31 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void SetupTrayIcon(Window mainWindow)
+    {
+        try
+        {
+            var tray = new TrayIcon
+            {
+                ToolTipText = "DualNet Downloader",
+                IsVisible = true
+            };
+            using (var stream = AssetLoader.Open(new Uri("avares://DualNet.App/Assets/app.ico")))
+                tray.Icon = new WindowIcon(stream);
+            tray.Clicked += (_, _) =>
+            {
+                mainWindow.Show();
+                mainWindow.WindowState = WindowState.Normal;
+                mainWindow.Activate();
+            };
+            var icons = new TrayIcons { tray };
+            TrayIcon.SetIcons(this, icons);
+        }
+        catch
+        {
+            // tray is optional (some Linux shells lack the extension)
+        }
     }
 }

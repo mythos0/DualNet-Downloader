@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DualNet.Core.Models;
@@ -14,6 +15,15 @@ namespace DualNet.Core.Engine;
 /// into its final offset in a pre-allocated file, persists progress for pause/resume, retries
 /// failed segments with exponential backoff, and falls back to a single stream when the server
 /// does not support ranges.
+///
+/// Robustness contract:
+///  - servers that answer 200 to a mid-download range request trigger a graceful downgrade
+///    to single-stream instead of failing the job;
+///  - resumes that get 200 (server dropped range support) restart from zero instead of
+///    corrupting the file;
+///  - transient network errors (reset, timeout, 5xx, truncation) are retried with backoff;
+///  - spurious cancellations (e.g. connect timeouts) surface as "Failed", never "Canceled";
+///  - per-adapter byte counters feed the Combined tab's per-network speed chips.
 /// </summary>
 public sealed class DownloadJob : IDisposable
 {
@@ -41,11 +51,23 @@ public sealed class DownloadJob : IDisposable
     private bool _filePathClaimed;
     private bool _disposed;
 
+    private readonly string? _authUser;
+    private readonly string? _authPassword;
+
+    // Per-adapter accounting (index = bind-address slot).
+    private long[] _perAdapterBytes = Array.Empty<long>();
+    private double[] _perAdapterSpeed = Array.Empty<double>();
+    private long[] _lastPerAdapterSample = Array.Empty<long>();
+    private long _lastPerAdapterTimestamp;
+
     public DownloadJob(string url, IReadOnlyList<IPAddress> bindAddresses, DownloadScope scope,
                        string targetDirectory, DownloadOptions? options = null,
                        string? fileNameOverride = null)
     {
-        Url = url.Trim();
+        var auth = AuthUrlParser.Parse(url);
+        Url = auth.Url;
+        _authUser = auth.UserName;
+        _authPassword = auth.Password;
         BindAddresses = bindAddresses;
         Scope = scope;
         TargetDirectory = targetDirectory;
@@ -74,6 +96,12 @@ public sealed class DownloadJob : IDisposable
     public DateTime? StartedUtc { get; private set; }
     public DateTime? FinishedUtc { get; private set; }
 
+    /// <summary>Instantaneous speed per bound adapter (bytes/s), index = BindAddresses order.</summary>
+    public IReadOnlyList<double> PerAdapterSpeedBps => _perAdapterSpeed;
+
+    /// <summary>Cumulative bytes downloaded per bound adapter, index = BindAddresses order.</summary>
+    public IReadOnlyList<long> PerAdapterBytesTotal => _perAdapterBytes;
+
     /// <summary>Wall-clock seconds from first Start() to Completed (0 when unfinished).</summary>
     public double DurationSeconds =>
         StartedUtc is { } s
@@ -89,6 +117,14 @@ public sealed class DownloadJob : IDisposable
 
     public event Action<DownloadJob, long, long, double>? ProgressChanged;   // received, total (-1 unknown), speed bps
     public event Action<DownloadJob>? StatusChanged;
+
+    /// <summary>Diagnostic lifecycle notes (range fallback, resume reset, probe retries…).</summary>
+    public event Action<DownloadJob, string, string>? DiagnosticEvent;      // kind, message
+
+    private void Diagnose(string kind, string message)
+    {
+        try { DiagnosticEvent?.Invoke(this, kind, message); } catch { }
+    }
 
     // ---- lifecycle ---------------------------------------------------------------------------
 
@@ -106,6 +142,7 @@ public sealed class DownloadJob : IDisposable
         _cts = new CancellationTokenSource();
         _lastSampleReceived = 0;
         _lastSampleTimestamp = Stopwatch.GetTimestamp();
+        _lastPerAdapterTimestamp = _lastSampleTimestamp;
         StartProgressTimer();
         RaiseStatus();
         _runTask = RunAsync(_cts.Token);
@@ -149,20 +186,7 @@ public sealed class DownloadJob : IDisposable
 
             if (!_stateLoadedFromDisk && _segments.Count == 0)
             {
-                // Probe with retries: transient 5xx on the first request must not fail the job.
-                for (int attempt = 0; ; attempt++)
-                {
-                    try
-                    {
-                        await ProbeAsync(ct).ConfigureAwait(false);   // size, ranges, filename, plan, preallocate
-                        break;
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException
-                                               && attempt < Options.RetryCount)
-                    {
-                        await Task.Delay(BackoffDelay(attempt + 1), ct).ConfigureAwait(false);
-                    }
-                }
+                await ProbeWithRetriesAsync(ct).ConfigureAwait(false);   // size, ranges, filename, plan, preallocate
             }
             else if (_stateLoadedFromDisk)
             {
@@ -171,14 +195,14 @@ public sealed class DownloadJob : IDisposable
 
             ct.ThrowIfCancellationRequested();
 
-            if (_rangeSupported && _totalSize > 0)
+            if (Status == DownloadStatus.Preparing)
             {
-                await RunSegmentedAsync(ct).ConfigureAwait(false);
+                // Probe done, plan fixed, file pre-allocated — actual byte transfer starts now.
+                Status = DownloadStatus.Downloading;
+                RaiseStatus();
             }
-            else
-            {
-                await RunSingleStreamAsync(ct).ConfigureAwait(false);
-            }
+
+            await DownloadBodyAsync(ct).ConfigureAwait(false);
 
             FinishComplete();
         }
@@ -189,16 +213,17 @@ public sealed class DownloadJob : IDisposable
             StatusMessage = null;
             SpeedBps = 0;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             Status = DownloadStatus.Canceled;   // user cancel; manager cleans partial files
             SpeedBps = 0;
         }
         catch (Exception ex)
         {
+            // Includes spurious OCEs (connect timeouts etc.) — they are failures, not cancels.
             PersistState();
             Status = DownloadStatus.Failed;
-            StatusMessage = ex.Message;
+            StatusMessage = FriendlyError(ex);
             SpeedBps = 0;
         }
         finally
@@ -209,21 +234,112 @@ public sealed class DownloadJob : IDisposable
         }
     }
 
+    /// <summary>Runs the body in the best mode the server supports, downgrading gracefully.</summary>
+    private async Task DownloadBodyAsync(CancellationToken ct)
+    {
+        while (true)
+        {
+            if (_rangeSupported && _totalSize > 0)
+            {
+                try
+                {
+                    await RunSegmentedAsync(ct).ConfigureAwait(false);
+                    return;
+                }
+                catch (RangeIgnoredException ex)
+                {
+                    // Server stopped honoring Range mid-flight: fall back to one stream.
+                    DowngradeToSingleStream(ex.Message);
+                    continue;
+                }
+            }
+            else
+            {
+                await RunSingleStreamAsync(ct).ConfigureAwait(false);
+                return;
+            }
+        }
+    }
+
+    private void DowngradeToSingleStream(string reason)
+    {
+        lock (_sync)
+        {
+            _rangeSupported = false;
+            _totalSize = -1;
+            _etag = null;
+            _lastModifiedUtc = null;
+            _segments = new List<SegmentState> { new() { Start = 0, End = -1, Written = 0 } };
+            _stateLoadedFromDisk = false;
+        }
+        ReceivedBytes = 0;
+        try
+        {
+            using var fs = new FileStream(FilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+            fs.SetLength(0);
+        }
+        catch { }
+        Diagnose("range_fallback", reason);
+        PersistState();
+    }
+
     private void EnsureClients()
     {
         if (_clients.Count == 0)
+        {
             _clients = HttpConnectionFactory.CreateAll(BindAddresses).ToList();
+            _perAdapterBytes = new long[_clients.Count];
+            _perAdapterSpeed = new double[_clients.Count];
+            _lastPerAdapterSample = new long[_clients.Count];
+            _lastPerAdapterTimestamp = Stopwatch.GetTimestamp();
+        }
+    }
+
+    private HttpRequestMessage NewRequest(HttpMethod method)
+    {
+        var request = new HttpRequestMessage(method, Url);
+        var basic = AuthUrlParser.BasicHeaderValue(_authUser, _authPassword);
+        if (basic is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        return request;
     }
 
     // ---- probe / plan ------------------------------------------------------------------------
 
+    private async Task ProbeWithRetriesAsync(CancellationToken ct)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await ProbeAsync(ct).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;   // user pause/cancel — never swallow
+            }
+            catch (Exception ex) when (attempt < Options.RetryCount)
+            {
+                // Transient probe failure (5xx, reset, timeout, stall watchdog): retry.
+                _lastError = ex;
+                if (attempt == 0)
+                    Diagnose("probe_retry", FriendlyError(ex));
+                await Task.Delay(BackoffDelay(attempt + 1), ct).ConfigureAwait(false);
+            }
+        }
+    }
+
     private async Task ProbeAsync(CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, Url);
+        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        attemptCts.CancelAfter(Options.StallTimeoutMs);   // hung servers fail fast, retried by caller
+
+        using var request = NewRequest(HttpMethod.Get);
         request.Headers.Range = new RangeHeaderValue(0, 0);
 
         using var response = await _clients[0]
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token)
             .ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.PartialContent)
@@ -298,7 +414,10 @@ public sealed class DownloadJob : IDisposable
         if (string.IsNullOrEmpty(_etag) && string.IsNullOrEmpty(_lastModifiedUtc))
             return;   // nothing to validate against — best-effort resume
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, Url);
+        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        attemptCts.CancelAfter(Options.StallTimeoutMs);
+
+        using var request = NewRequest(HttpMethod.Get);
         request.Headers.Range = new RangeHeaderValue(0, 0);
         if (!string.IsNullOrEmpty(_etag))
             request.Headers.IfRange = new RangeConditionHeaderValue(_etag);
@@ -306,7 +425,7 @@ public sealed class DownloadJob : IDisposable
             request.Headers.IfRange = new RangeConditionHeaderValue(lm);
 
         using var response = await _clients[0]
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token)
             .ConfigureAwait(false);
 
         // If-Range mismatch => server replies 200 with the full new body => changed.
@@ -348,7 +467,7 @@ public sealed class DownloadJob : IDisposable
             int adapterSlot = SegmentPlanner.AssignAdapter(i, adapterCount);
             var client = _clients[Math.Min(adapterSlot, _clients.Count - 1)];
             int index = i;
-            workers.Add(Task.Run(() => SegmentWorkerAsync(client, index, segment, ct), ct));
+            workers.Add(Task.Run(() => SegmentWorkerAsync(client, adapterSlot, index, segment, ct), ct));
         }
 
         if (workers.Count > 0)
@@ -369,7 +488,8 @@ public sealed class DownloadJob : IDisposable
             fs.Flush();
     }
 
-    private async Task SegmentWorkerAsync(HttpClient client, int index, SegmentState segment, CancellationToken ct)
+    private async Task SegmentWorkerAsync(HttpClient client, int adapterSlot, int index,
+                                          SegmentState segment, CancellationToken ct)
     {
         long segmentLength = segment.End - segment.Start + 1;
         int failedAttempts = 0;
@@ -386,7 +506,7 @@ public sealed class DownloadJob : IDisposable
                 long progressedThisAttempt = 0;
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Get, Url);
+                    using var request = NewRequest(HttpMethod.Get);
                     request.Headers.Range = new RangeHeaderValue(segment.Start + done, segment.End);
 
                     using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -396,9 +516,19 @@ public sealed class DownloadJob : IDisposable
                         .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token)
                         .ConfigureAwait(false);
 
+                    if (response.StatusCode == HttpStatusCode.OK)
+                        throw new RangeIgnoredException(
+                            $"Server ignored the range request (HTTP 200 instead of 206); cannot segment.");
+
                     if (response.StatusCode != HttpStatusCode.PartialContent)
                         throw new IOException(
-                            $"Server ignored the range request (HTTP {(int)response.StatusCode}); cannot segment.");
+                            $"Unexpected HTTP {(int)response.StatusCode} for a range request.");
+
+                    // A mismatched Content-Range means the server/proxy mangled the request — retriable.
+                    var contentRange = response.Content.Headers.ContentRange;
+                    if (contentRange is { HasRange: true } && contentRange.From != segment.Start + done)
+                        throw new IOException(
+                            $"Server returned mismatched Content-Range (asked {segment.Start + done}, got {contentRange.From}).");
 
                     await using var stream = await response.Content
                         .ReadAsStreamAsync(attemptCts.Token).ConfigureAwait(false);
@@ -422,6 +552,7 @@ public sealed class DownloadJob : IDisposable
                             done += read;
                             progressedThisAttempt += read;
                             segment.Written = done;
+                            AccountBytes(adapterSlot, read);
 
                             if (_pauseRequested)
                                 throw new OperationCanceledException();   // graceful stop
@@ -446,6 +577,14 @@ public sealed class DownloadJob : IDisposable
                 catch (OperationCanceledException)
                 {
                     // stall watchdog fired — retriable
+                }
+                catch (RangeIgnoredException)
+                {
+                    throw;    // job-level downgrade — not a per-segment retry
+                }
+                catch (Exception ex) when (IsTransient(ex) && !ct.IsCancellationRequested && !_pauseRequested)
+                {
+                    _lastError = ex;   // transient network error — retriable
                 }
 
                 if (_pauseRequested)
@@ -472,6 +611,34 @@ public sealed class DownloadJob : IDisposable
         }
     }
 
+    private void AccountBytes(int adapterSlot, int bytes)
+    {
+        if (adapterSlot >= 0 && adapterSlot < _perAdapterBytes.Length)
+            Interlocked.Add(ref _perAdapterBytes[adapterSlot], bytes);
+    }
+
+    private static bool IsTransient(Exception ex) =>
+        ex is not RangeIgnoredException &&
+        (ex is SocketException
+         || ex is IOException
+         || (ex is HttpRequestException h && (h.StatusCode is null
+              || h.StatusCode >= HttpStatusCode.InternalServerError
+              || h.StatusCode == HttpStatusCode.RequestTimeout
+              || h.StatusCode == HttpStatusCode.TooManyRequests)));
+
+    internal static string FriendlyError(Exception ex) => ex switch
+    {
+        TaskCanceledException t when t.InnerException is SocketException se
+            => $"Connection timed out ({se.SocketErrorCode}).",
+        OperationCanceledException o when o.InnerException is SocketException se2
+            => $"Connection timed out ({se2.SocketErrorCode}).",
+        HttpRequestException h when h.InnerException is SocketException s
+            => $"Network error: {s.SocketErrorCode}.",
+        HttpRequestException h => h.Message,
+        SocketException s2 => $"Network error: {s2.SocketErrorCode}.",
+        _ => ex.Message
+    };
+
     private static TimeSpan BackoffDelay(int attempt) =>
         TimeSpan.FromMilliseconds(Math.Min(1000L << Math.Min(attempt - 1, 4), 15_000));
 
@@ -492,7 +659,7 @@ public sealed class DownloadJob : IDisposable
 
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, Url);
+                using var request = NewRequest(HttpMethod.Get);
                 if (canResume)
                     request.Headers.Range = new RangeHeaderValue(done, null);
 
@@ -502,6 +669,26 @@ public sealed class DownloadJob : IDisposable
                 using var response = await _clients[0]
                     .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token)
                     .ConfigureAwait(false);
+
+                if (canResume && response.StatusCode == HttpStatusCode.OK)
+                {
+                    // Server stopped honoring ranges on resume — restarting from zero keeps the
+                    // file correct instead of overwriting [done..] with the full body.
+                    ResetSingleStreamToZero(segment);
+                    failedAttempts++;
+                    if (failedAttempts > Options.RetryCount)
+                        throw new IOException("Server keeps ignoring Range on resume; giving up.");
+                    await Task.Delay(BackoffDelay(failedAttempts), ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (response.StatusCode == HttpStatusCode.PartialContent)
+                {
+                    var contentRange = response.Content.Headers.ContentRange;
+                    if (contentRange is { HasRange: true } && contentRange.From != done)
+                        throw new IOException("Server returned mismatched Content-Range on resume; retrying.");
+                }
+
                 response.EnsureSuccessStatusCode();
 
                 // Guard against servers/proxies that report success but deliver nothing:
@@ -523,13 +710,13 @@ public sealed class DownloadJob : IDisposable
                     int read;
                     while ((read = await stream.ReadAsync(buffer, attemptCts.Token).ConfigureAwait(false)) > 0)
                     {
-                        // Honor the global speed cap (shared across all jobs/adapters) before writing.
                         await GlobalSpeedLimit.AcquireAsync(read, ct).ConfigureAwait(false);
                         attemptCts.CancelAfter(Options.StallTimeoutMs);   // throttling is not a stall
 
                         await fs.WriteAsync(buffer.AsMemory(0, read), attemptCts.Token).ConfigureAwait(false);
                         done += read;
                         segment.Written = done;
+                        AccountBytes(0, read);
 
                         if (_pauseRequested)
                             throw new OperationCanceledException();
@@ -558,13 +745,32 @@ public sealed class DownloadJob : IDisposable
             {
                 // stall watchdog — retriable
             }
+            catch (Exception ex) when (IsTransient(ex) && !ct.IsCancellationRequested && !_pauseRequested)
+            {
+                _lastError = ex;   // transient — retriable
+            }
 
             failedAttempts++;
             if (failedAttempts > Options.RetryCount)
-                throw new IOException($"Download failed after {Options.RetryCount} retries.");
+                throw new IOException($"Download failed after {Options.RetryCount} retries: {_lastError?.Message ?? "repeated errors"}.");
 
             await Task.Delay(BackoffDelay(failedAttempts), ct).ConfigureAwait(false);
         }
+    }
+
+    private void ResetSingleStreamToZero(SegmentState segment)
+    {
+        segment.Written = 0;
+        ReceivedBytes = 0;
+        _rangeSupported = false;   // server is inconsistent with ranges — plain GET from now on
+        try
+        {
+            using var fs = new FileStream(FilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+            fs.SetLength(0);
+        }
+        catch { }
+        Diagnose("resume_reset", "Server stopped honoring Range on resume — restarting from zero.");
+        PersistState();
     }
 
     // ---- completion / state ------------------------------------------------------------------
@@ -701,6 +907,21 @@ public sealed class DownloadJob : IDisposable
         _lastSampleTimestamp = now;
         ReceivedBytes = received;
         SpeedBps = Status is DownloadStatus.Downloading or DownloadStatus.Preparing ? speed : 0;
+
+        if (_perAdapterBytes.Length > 0)
+        {
+            double paDt = Math.Max(0.05, (now - _lastPerAdapterTimestamp) / (double)Stopwatch.Frequency);
+            var speeds = new double[_perAdapterBytes.Length];
+            bool active = Status is DownloadStatus.Downloading or DownloadStatus.Preparing;
+            for (int i = 0; i < speeds.Length; i++)
+            {
+                var total = Interlocked.Read(ref _perAdapterBytes[i]);
+                speeds[i] = active ? Math.Max(0, total - _lastPerAdapterSample[i]) / paDt : 0;
+                _lastPerAdapterSample[i] = total;
+            }
+            _perAdapterSpeed = speeds;
+            _lastPerAdapterTimestamp = now;
+        }
 
         ProgressChanged?.Invoke(this, ReceivedBytes, TotalBytes, SpeedBps);
     }

@@ -72,7 +72,9 @@ public sealed record NetworkAdapterInfo(
     string Description,
     string TypeName,          // "Ethernet", "Wi-Fi", "Other"
     string IPv4Address,
-    ulong SpeedBitsPerSecond)
+    ulong SpeedBitsPerSecond,
+    bool IsManual = false,    // user-defined "network provider" (auto-scan missed it)
+    bool IsOnline = true)     // false = manual provider whose IP is not present on this PC
 {
     public string SpeedText =>
         SpeedBitsPerSecond >= 1_000_000_000
@@ -94,6 +96,18 @@ public sealed class PersistedDownloadState
     public List<string> AdapterIds { get; set; } = new();
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public List<SegmentState> Segments { get; set; } = new();
+}
+
+/// <summary>
+/// A user-defined network provider, for adapters the automatic scan does not offer
+/// (filtered virtual adapters, VPN tunnels, multi-IP NICs, …). Identified by its IPv4
+/// address — the engine binds sockets to that address.
+/// </summary>
+public sealed class ManualAdapterEntry
+{
+    public string Name { get; set; } = "";
+    public string IPv4Address { get; set; } = "";
+    public string TypeName { get; set; } = "Other";   // Ethernet / Wi-Fi / Other
 }
 
 /// <summary>One entry in the download history.</summary>

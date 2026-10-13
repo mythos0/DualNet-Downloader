@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using DualNet.App.ViewModels;
 
 namespace DualNet.App.Views;
@@ -29,6 +30,20 @@ public partial class SettingsWindow : Window
             vm.DownloadDirectory = folders[0].Path.LocalPath;
     }
 
+    private async void OnSendSentryTest(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn) btn.IsEnabled = false;
+        try
+        {
+            if (DataContext is SettingsViewModel vm)
+                await vm.SendSentryTestEvent();
+        }
+        finally
+        {
+            if (sender is Button btn2) btn2.IsEnabled = true;
+        }
+    }
+
     private void OnSave(object? sender, RoutedEventArgs e)
     {
         if (DataContext is SettingsViewModel vm)
@@ -37,4 +52,6 @@ public partial class SettingsWindow : Window
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close();
+
+    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 }

@@ -27,6 +27,7 @@ public partial class DownloadTabViewModel : ObservableObject
     public ObservableCollection<DownloadItemViewModel> Items { get; } = new();
     public ObservableCollection<HistoryItemViewModel> HistoryEntries { get; } = new();
     public ObservableCollection<string> RecentUrls { get; } = new();
+    public ObservableCollection<AdapterSpeedChipViewModel> AdapterSpeedChips { get; } = new();
 
     [ObservableProperty] private string urlInput = "";
     [ObservableProperty] private string? inputError;
@@ -36,6 +37,8 @@ public partial class DownloadTabViewModel : ObservableObject
     [ObservableProperty] private bool hasNoItems = true;
     [ObservableProperty] private bool canGoBack;
     [ObservableProperty] private bool canGoForward;
+    [ObservableProperty] private bool isSpeedTesting;
+    [ObservableProperty] private string speedTestText = "";
 
     partial void OnHasNoItemsChanged(bool value)
     {
@@ -58,6 +61,9 @@ public partial class DownloadTabViewModel : ObservableObject
 
     /// <summary>Raised every sampling tick with the tab's aggregate speed (bytes/s).</summary>
     public event Action<double>? SpeedSampled;
+
+    /// <summary>Engine diagnostics (range fallback, resume reset…) re-raised from items.</summary>
+    public event Action<string, string>? Diagnostic;
 
     private readonly DispatcherTimer _sampleTimer;
     private readonly List<string> _backStack = new();
@@ -87,8 +93,22 @@ public partial class DownloadTabViewModel : ObservableObject
             return;
         }
 
+        LoadAdapterChips();
         _sampleTimer = MakeTimer(true);
     }
+
+    private void LoadAdapterChips()
+    {
+        AdapterSpeedChips.Clear();
+        foreach (var adapter in TabAdapters())
+            AdapterSpeedChips.Add(new AdapterSpeedChipViewModel(adapter));
+    }
+
+    /// <summary>Adapters this tab is allowed to use, resolved fresh (offline providers excluded).</summary>
+    public IReadOnlyList<NetworkAdapterInfo> TabAdapters() =>
+        Kind == TabKind.Combined
+            ? AppServices.Adapters.Where(a => a.IsOnline).ToList()
+            : Adapter is null ? Array.Empty<NetworkAdapterInfo>() : new[] { Adapter };
 
     private DispatcherTimer MakeTimer(bool enabled)
     {
@@ -273,10 +293,23 @@ public partial class DownloadTabViewModel : ObservableObject
         RememberRecent(job.Url);
     }
 
+    /// <summary>
+    /// Moves an existing item VM (its job keeps running) into this tab — used when a
+    /// network goes offline and its tab's downloads are migrated to the Combined tab.
+    /// </summary>
+    public void AdoptItem(DownloadItemViewModel item)
+    {
+        WireItem(item);
+        Items.Insert(0, item);
+        HasNoItems = Items.Count == 0;
+        RememberRecent(item.Url);
+    }
+
     private void WireItem(DownloadItemViewModel item)
     {
         item.RestartRequested += OnItemRestart;
         item.RemoveRequested += OnItemRemove;
+        item.Diagnostic += (kind, message) => Diagnostic?.Invoke(kind, message);
     }
 
     private void OnItemRestart(DownloadItemViewModel item)
@@ -385,6 +418,7 @@ public partial class DownloadTabViewModel : ObservableObject
     {
         double sum = 0;
         int active = 0;
+        var perIp = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in Items)
         {
             if (item.IsActive)
@@ -392,17 +426,105 @@ public partial class DownloadTabViewModel : ObservableObject
                 sum += item.SpeedBps;
                 active++;
             }
+
+            // Aggregate per-adapter speeds across this tab's jobs (slot -> adapter IP).
+            var job = item.Job;
+            var speeds = job.PerAdapterSpeedBps;
+            for (int slot = 0; slot < speeds.Count && slot < job.BindAddresses.Count; slot++)
+            {
+                var ip = job.BindAddresses[slot].ToString();
+                perIp[ip] = perIp.GetValueOrDefault(ip) + speeds[slot];
+            }
         }
         TabSpeedBps = sum;
         TabSpeedText = Formatter.Speed(sum);
         ItemSummaryText = $"{active} active · {Items.Count} total";
+        UpdateAdapterChips(perIp);
         SpeedSampled?.Invoke(sum);
+    }
+
+    private void UpdateAdapterChips(Dictionary<string, double> perIp)
+    {
+        foreach (var chip in AdapterSpeedChips)
+            chip.SpeedText = Formatter.Speed(perIp.GetValueOrDefault(chip.IpAddress));
+    }
+
+    // ---- per-adapter speed test ---------------------------------------------------------------
+
+    private bool CanRunSpeedTest() => !IsSpeedTesting;
+
+    [RelayCommand(CanExecute = nameof(CanRunSpeedTest))]
+    private async Task RunSpeedTest()
+    {
+        var adapters = TabAdapters();
+        if (adapters.Count == 0)
+        {
+            SpeedTestText = "No adapter online to test.";
+            return;
+        }
+
+        IsSpeedTesting = true;
+        RunSpeedTestCommand.NotifyCanExecuteChanged();
+        try
+        {
+            const long testBytes = 12_000_000;   // ~12 MB per adapter
+            var results = new List<string>();
+            foreach (var adapter in adapters)
+            {
+                SpeedTestText = $"Testing {adapter.Name}…";
+                try
+                {
+                    var result = await Task.Run(() => SpeedTestService.RunAsync(
+                        adapter.Name,
+                        System.Net.IPAddress.Parse(adapter.IPv4Address),
+                        AppServices.Settings.SpeedTestUrl,
+                        testBytes,
+                        CancellationToken.None));
+                    results.Add($"{adapter.Name}: {result.MegabitsPerSecond:0.#} Mbps");
+                    SentrySetup.TrackSpeedTest(adapter.Name, result.MegabitsPerSecond, true);
+                }
+                catch (Exception ex)
+                {
+                    results.Add($"{adapter.Name}: failed");
+                    SentrySetup.TrackSpeedTest(adapter.Name, 0, false);
+                    SentrySetup.CaptureMessage($"Speed test failed on {adapter.Name}: {ex.Message}", "speedtest");
+                }
+            }
+            SpeedTestText = string.Join("   ·   ", results);
+        }
+        finally
+        {
+            IsSpeedTesting = false;
+            RunSpeedTestCommand.NotifyCanExecuteChanged();
+        }
     }
 
     public void Shutdown() => _sampleTimer.IsEnabled = false;
 
     private static string TrimUrl(string url) =>
         url.Length <= 42 ? url : url[..39] + "…";
+}
+
+/// <summary>One per-adapter live speed pill shown next to the tab speed graph.</summary>
+public partial class AdapterSpeedChipViewModel : ObservableObject
+{
+    public AdapterSpeedChipViewModel(NetworkAdapterInfo info, string colorHex = "#22D3EE")
+    {
+        Name = info.Name.Length > 16 ? info.Name[..16] : info.Name;
+        TypeName = info.TypeName;
+        IpAddress = info.IPv4Address;
+        ColorHex = colorHex;
+        DotBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(colorHex));
+        SpeedText = "0 B/s";
+    }
+
+    public string Name { get; }
+    public string TypeName { get; }
+    public string IpAddress { get; }
+    public string ColorHex { get; }
+    public Avalonia.Media.IBrush DotBrush { get; }
+
+    [ObservableProperty] private string speedText;
 }
 
 /// <summary>Row in the History tab.</summary>

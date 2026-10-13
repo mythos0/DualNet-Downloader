@@ -10,7 +10,31 @@ namespace DualNet.Core.Net;
 /// </summary>
 public static class HttpConnectionFactory
 {
-    public const string UserAgent = "DualNetDownloader/1.0 (+dual-network segment downloader)";
+    public const string UserAgent = "DualNetDownloader/1.1 (+dual-network segment downloader)";
+
+    private static volatile IWebProxy? _proxyOverride;
+
+    /// <summary>
+    /// Configures the proxy used by every download connection.
+    /// mode: 0 = direct, 1 = system proxy, 2 = manual host:port.
+    /// </summary>
+    public static void ConfigureProxy(int mode, string host, int port)
+    {
+        switch (mode)
+        {
+            case 1:
+                _proxyOverride = HttpClient.DefaultProxy;
+                break;
+            case 2:
+                _proxyOverride = string.IsNullOrWhiteSpace(host)
+                    ? null
+                    : new WebProxy(host.Trim(), Math.Clamp(port, 1, 65535));
+                break;
+            default:
+                _proxyOverride = null;
+                break;
+        }
+    }
 
     public static HttpClient Create(IPAddress bindAddress)
     {
@@ -20,7 +44,8 @@ public static class HttpConnectionFactory
         {
             AllowAutoRedirect = true,
             MaxAutomaticRedirections = 10,
-            UseProxy = false,
+            Proxy = _proxyOverride,
+            UseProxy = _proxyOverride is not null,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             ConnectTimeout = TimeSpan.FromSeconds(20),
             ConnectCallback = async (context, cancellationToken) =>

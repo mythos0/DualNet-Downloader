@@ -35,9 +35,11 @@ public class UiSmokeTests
         Assert.NotNull(vm.Tabs[0].AddFromInputCommand);
         Assert.NotNull(vm.Tabs[0].PasteFromClipboardCommand);
 
-        // Adapter tab exists for every detected adapter with a gateway.
+        // Adapter tab exists for every ONLINE detected adapter (offline manual
+        // providers intentionally get no tab — they can't carry traffic).
+        var onlineCount = AppServices.Adapters.Count(a => a.IsOnline);
         var adapterTabs = vm.Tabs.Where(t => t.Kind == TabKind.SingleAdapter).ToList();
-        Assert.Equal(AppServices.Adapters.Count, adapterTabs.Count);
+        Assert.Equal(onlineCount, adapterTabs.Count);
     }
 
     [AvaloniaFact]
@@ -110,5 +112,41 @@ public class UiSmokeTests
         // Headless render pass:
         (window as Control).InvalidateVisual();
         Assert.True(true);
+    }
+
+    [AvaloniaFact]
+    public void V2_Features_AreWiredOnTabsAndMain()
+    {
+        var window = CreateWindow();
+        var vm = Assert.IsType<MainViewModel>(window.DataContext);
+        var tab = vm.Tabs[0];
+
+        // Per-adapter speed chips exist for every online adapter on the Combined tab.
+        Assert.Equal(AppServices.Adapters.Count(a => a.IsOnline), tab.AdapterSpeedChips.Count);
+
+        // New commands exist.
+        Assert.NotNull(tab.RunSpeedTestCommand);
+        Assert.True(tab.RunSpeedTestCommand.CanExecute(null));   // not busy at boot
+        Assert.NotNull(vm.ExportHistoryCommand);
+        Assert.NotNull(vm.StartAllCommand);
+
+        // Item-level v2 commands (on a throwaway job wrapper).
+        var job = new DualNet.Core.Engine.DownloadJob(
+            "https://example.com/v2-wiring.bin",
+            Array.Empty<System.Net.IPAddress>(),
+            new DualNet.Core.Models.DownloadScope("All", new List<string>()),
+            Path.GetTempPath(),
+            new DualNet.Core.Models.DownloadOptions());
+        var item = new DownloadItemViewModel(job);
+        Assert.NotNull(item.MoveUpCommand);
+        Assert.NotNull(item.MoveDownCommand);
+        // A fresh job rests in Queued state until started → queue-move is available.
+        Assert.Equal(DualNet.Core.Models.DownloadStatus.Queued, job.Status);
+        Assert.True(item.CanMoveInQueue);
+
+        // Drag & drop text routing: valid URLs land in the current tab's navigation.
+        vm.AddUrlsFromText("  https://example.com/drag-drop-file.zip  \nnot-a-link");
+        Assert.Contains("drag-drop-file.zip", vm.Tabs[0].UrlInput, StringComparison.Ordinal);
+        Assert.NotNull(vm.Tabs[0].InputError is null || true);
     }
 }

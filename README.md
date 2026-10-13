@@ -42,6 +42,15 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
   (great for big overnight grabs; abort with `shutdown /a`).
 - **Per-network tabs** — a `Combined` tab (uses every active adapter) plus one tab per
   detected adapter; downloads started in a tab use **only** that tab's network(s).
+- **Auto-refreshing networks** — the app rescans adapters every 5 s: plug in a cable or join
+  a Wi-Fi network and **its tab appears automatically** (a toast announces it); when a
+  network disappears, its tab is removed and its downloads move to the Combined tab. The
+  header **↻** button rescans on demand.
+- **Manual network providers** — for networks the auto-scan does not offer (VPN tunnels,
+  virtual switches, multi-IP NICs, adapters without a gateway): click **＋** in the header,
+  give the provider a name and a local IPv4 address, and it becomes a first-class network
+  chip + tab (greyed out while that IP is not present on the PC; never receives download
+  binds while offline).
 - **Dark + Light theme** — follows the system theme by default, switchable in the toolbar.
 - **Pause / Resume** — segment progress is persisted to disk; you can pause, close the app,
   reboot, and resume where you left off (guarded by ETag / Last-Modified revalidation).
@@ -53,13 +62,23 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
 - **Live speed graph** — per-tab sparkline plus total throughput in the status bar.
 - **History** — completed/failed downloads recorded locally (JSON), with a History tab.
 - **Single-stream fallback** — servers without HTTP Range support are downloaded normally.
+- **Per-adapter speed test** — one-click throughput test per network (custom endpoint
+  configurable in settings).
+- **IDM-style scheduler** — restrict downloading to a daily time window (e.g. overnight),
+  with automatic pause/resume at the window edges.
+- **Category folders** — optionally sort finished files into `Video/`, `Audio/`,
+  `Compressed/`, `Documents/`, `Programs/`, `Images/` sub-folders (IDM-style).
+- **Local integration API** — optional localhost HTTP endpoint (`GET /add?url=…`, default
+  port 45454) so browsers, scripts and other apps can push downloads into DualNet.
+- **Proxy support** — system proxy or a manual proxy host/port for all download traffic.
+- **Queue reordering** — move waiting downloads up/down (IDM-style priority).
 - **Sentry telemetry** — logs, metrics (`download_started/completed/canceled`,
   `download_duration`, `download_speed`) and global crash reporting wired in from launch.
 - **Zero install** — one self-contained `.exe`, runs on any Windows 10/11 x64 machine.
 
 ## Install
 
-Download **`DualNetDownloader-1.1.0-win-x64.exe`** from the
+Download **`DualNetDownloader-1.2.0-win-x64.exe`** from the
 [Releases page](https://github.com/mythos0/DualNet-Downloader/releases) and run it —
 no .NET runtime or installer required.
 

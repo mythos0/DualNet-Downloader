@@ -20,4 +20,8 @@
     <ProjectReference Include="..\..\src\DualNet.App\DualNet.App.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

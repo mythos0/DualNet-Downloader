@@ -12,7 +12,6 @@
     <Border Grid.Row="0" Classes="urlbar" IsVisible="{Binding IsDownloadTab}">
       <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
 
-        <!-- Navigation cluster: back / forward / reload / home -->
         <Button Grid.Column="0" Classes="toolbtn nav" Content="◀" Command="{Binding GoBackCommand}"
                 IsEnabled="{Binding CanGoBack}" ToolTip.Tip="Back — previous link" />
         <Button Grid.Column="1" Classes="toolbtn nav" Content="▶" Command="{Binding GoForwardCommand}"
@@ -22,8 +21,7 @@
         <Button Grid.Column="3" Classes="toolbtn nav" Content="⌂" Command="{Binding GoHomeCommand}"
                 ToolTip.Tip="Home — clear the address bar" Margin="4,0,8,0" />
 
-        <!-- Address bar -->
-        <TextBox x:Name="AddressBox" Grid.Column="4"
+        <TextBox x:Name="AddressBox" Grid.Column="4" Classes="address"
                  Watermark="Enter a link — example.com/file.zip or https://…  (Enter ⇣, Ctrl+L)"
                  Text="{Binding UrlInput}"
                  KeyDown="OnAddressKeyDown" />
@@ -34,7 +32,7 @@
                 CommandParameter="{Binding UrlInput}" ToolTip.Tip="Start downloading (Enter)" Margin="8,0,0,0" />
 
         <!-- Scope + quick actions row -->
-        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="7" ColumnDefinitions="*,Auto" Margin="2,7,0,0">
+        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="7" ColumnDefinitions="*,Auto" Margin="2,8,0,0">
           <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
             <TextBlock Text="{Binding ScopeHint}" Classes="hint" VerticalAlignment="Center" />
             <TextBlock Text="{Binding InputError}" Classes="error"
@@ -71,14 +69,14 @@
 
         <!-- ============ Browser home / start page ============ -->
         <StackPanel IsVisible="{Binding ShowHome}" HorizontalAlignment="Center"
-                    Margin="0,46,0,0" Spacing="8" MaxWidth="640">
-          <Border Classes="homeLogo" HorizontalAlignment="Center" Margin="0,0,0,6">
+                    Margin="0,52,0,0" Spacing="8" MaxWidth="660">
+          <Border Classes="homeLogo" HorizontalAlignment="Center" Margin="0,0,0,8">
             <TextBlock Text="⇊" />
           </Border>
-          <TextBlock Text="DualNet Downloader" FontSize="22" FontWeight="Bold" TextAlignment="Center" />
+          <TextBlock Text="DualNet Downloader" FontSize="23" FontWeight="Bold" TextAlignment="Center" />
           <TextBlock Classes="hint" TextAlignment="Center" TextWrapping="Wrap"
                      Text="Type a link in the address bar above — the file is split into segments and downloaded over your Ethernet and Wi-Fi adapters at the same time, then reassembled byte-for-byte." />
-          <TextBlock Classes="hint" TextAlignment="Center" Margin="0,8,0,2"
+          <TextBlock Classes="hint" TextAlignment="Center" Margin="0,10,0,2"
                      IsVisible="{Binding HasRecentUrls}"
                      Text="Recent links — click to download again:" />
 
@@ -108,44 +106,51 @@
         <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsDownloadTab}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:DownloadItemViewModel">
-              <Border Classes="card" Margin="0,0,0,8">
-                <Grid ColumnDefinitions="46,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
-                  <Border Grid.RowSpan="3" Width="36" Height="36" CornerRadius="9"
-                          Background="#1422D3EE" VerticalAlignment="Top">
-                    <TextBlock Text="{Binding StatusGlyph}" FontSize="19" FontWeight="Bold"
-                               Foreground="#22D3EE"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <Border Classes="card" Margin="0,0,0,9">
+                <Grid ColumnDefinitions="52,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+
+                  <Border Grid.RowSpan="4" Width="42" Height="42" CornerRadius="13"
+                          Background="{DynamicResource DnAccentSoftBrush}" VerticalAlignment="Top">
+                    <TextBlock Text="{Binding CategoryGlyph}" FontSize="19"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding CategoryLabel}" />
                   </Border>
 
-                  <Grid Grid.Column="1" Grid.Row="0" ColumnDefinitions="*,Auto">
+                  <Grid Grid.Column="1" Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
                     <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding Url}" />
-                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" Classes="dim"
+                    <TextBlock Grid.Column="2" Text="{Binding StatusText}" Classes="dim"
                                Margin="10,0,0,0" VerticalAlignment="Center" />
                   </Grid>
 
                   <ProgressBar Grid.Column="1" Grid.Row="1"
                                Value="{Binding ProgressPercent}" Maximum="100"
                                IsIndeterminate="{Binding IsIndeterminate}"
-                               Height="6" CornerRadius="3" Margin="0,7,0,0" />
+                               Height="7" Margin="0,8,0,0" />
 
-                  <Grid Grid.Column="1" Grid.Row="2" ColumnDefinitions="*,Auto,Auto"
-                        Margin="0,6,0,0">
+                  <Grid Grid.Column="1" Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto"
+                        Margin="0,7,0,0">
                     <TextBlock Text="{Binding ProgressText}" Classes="hint" />
-                    <TextBlock Grid.Column="1" Text="{Binding SpeedText}" Classes="hint"
+                    <TextBlock Grid.Column="1" Text="{Binding EtaText}" Classes="hint"
+                               Margin="0,0,14,0" />
+                    <TextBlock Grid.Column="2" Text="{Binding SpeedText}" Classes="hint"
                                FontWeight="SemiBold" Margin="0,0,14,0" />
-                    <TextBlock Grid.Column="2" Text="{Binding ErrorMessage}"
+                    <TextBlock Grid.Column="3" Text="{Binding ErrorMessage}"
                                Classes="error" IsVisible="{Binding HasError}"
-                               TextTrimming="CharacterEllipsis" MaxWidth="430" />
+                               TextTrimming="CharacterEllipsis" MaxWidth="400" />
                   </Grid>
 
-                  <TextBlock Grid.Column="1" Grid.Row="3" Classes="hint" Margin="0,4,0,0"
+                  <TextBlock Grid.Column="1" Grid.Row="3" Classes="ok" Margin="0,5,0,0"
                              Text="SHA-256 computed &amp; copied to clipboard ✓"
-                             IsVisible="{Binding HasHashText}" Foreground="#34D399" />
+                             IsVisible="{Binding HasHashText}" />
 
-                  <StackPanel Grid.Column="2" Grid.RowSpan="3" Orientation="Horizontal"
-                              Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
+                  <StackPanel Grid.Column="2" Grid.RowSpan="4" Orientation="Horizontal"
+                              Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Button Classes="toolbtn" Content="▲" IsVisible="{Binding CanMoveInQueue}"
+                            Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up in queue" />
+                    <Button Classes="toolbtn" Content="▼" IsVisible="{Binding CanMoveInQueue}"
+                            Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down in queue" />
                     <Button Classes="toolbtn" Content="⏸" IsVisible="{Binding CanPause}"
                             Command="{Binding PauseCommand}" ToolTip.Tip="Pause" />
                     <Button Classes="toolbtn" Content="▶" IsVisible="{Binding CanResume}"
@@ -176,7 +181,7 @@
         <ItemsControl ItemsSource="{Binding HistoryEntries}" IsVisible="{Binding IsHistoryTab}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:HistoryItemViewModel">
-              <Border Classes="card" Margin="0,0,0,8">
+              <Border Classes="card" Margin="0,0,0,9">
                 <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
                   <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
                              TextTrimming="CharacterEllipsis"
@@ -201,16 +206,46 @@
       </Panel>
     </ScrollViewer>
 
-    <!-- Per-tab speed graph -->
+    <!-- Per-tab speed graph + per-adapter live speeds + speed test -->
     <Border Grid.Row="2" Classes="graphbar" IsVisible="{Binding IsDownloadTab}">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
-          <TextBlock Text="{Binding TabSpeedText}" FontWeight="Bold" FontSize="14" />
+      <Grid RowDefinitions="Auto" ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,14,0">
+          <TextBlock Text="{Binding TabSpeedText}" FontWeight="Bold" FontSize="15" />
           <TextBlock Text="tab speed" Classes="hint" />
         </StackPanel>
-        <controls:SpeedGraph Grid.Column="1" Height="46" Margin="16,0,0,0" x:Name="Graph" />
-        <TextBlock Grid.Column="2" Text="{Binding ItemSummaryText}" Classes="hint"
-                   VerticalAlignment="Center" />
+
+        <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="6">
+          <controls:SpeedGraph Height="46" x:Name="Graph" />
+          <TextBlock Text="{Binding SpeedTestText}" Classes="hint" TextWrapping="Wrap"
+                     IsVisible="{Binding SpeedTestText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Vertical" Spacing="7" VerticalAlignment="Center"
+                    Margin="14,0,0,0">
+          <ItemsControl ItemsSource="{Binding AdapterSpeedChips}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="6" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:AdapterSpeedChipViewModel">
+                <Border Classes="speedChip" ToolTip.Tip="{Binding IpAddress}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding SpeedText}" FontSize="11" Classes="hint"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Classes="toolbtn mini" HorizontalAlignment="Right"
+                  Content="⚡ test speed" Command="{Binding RunSpeedTestCommand}"
+                  ToolTip.Tip="Measure real bandwidth through this tab's adapter(s)" />
+        </StackPanel>
       </Grid>
     </Border>
   </Grid>

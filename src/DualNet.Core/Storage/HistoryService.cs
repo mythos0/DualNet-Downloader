@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using DualNet.Core.Models;
 
 namespace DualNet.Core.Storage;
@@ -44,6 +46,26 @@ public sealed class HistoryService
         }
         Changed?.Invoke();
     }
+
+    /// <summary>Writes every entry to a CSV file. Returns the number of rows written.</summary>
+    public int ExportCsv(string path)
+    {
+        var entries = Entries;
+        var sb = new StringBuilder();
+        sb.AppendLine("FileName,Url,SizeBytes,Status,NetworkScope,FinishedUtc,FilePath,Message");
+        foreach (var e in entries)
+        {
+            sb.AppendLine(string.Join(',',
+                Csv(e.FileName), Csv(e.Url), e.SizeBytes.ToString(CultureInfo.InvariantCulture),
+                Csv(e.Status), Csv(e.NetworkScope),
+                e.FinishedUtc.ToString("o", CultureInfo.InvariantCulture),
+                Csv(e.FilePath), Csv(e.Message ?? "")));
+        }
+        File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
+        return entries.Count;
+    }
+
+    private static string Csv(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
 
     private void Save()
     {
