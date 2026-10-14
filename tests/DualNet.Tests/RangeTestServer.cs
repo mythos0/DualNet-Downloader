@@ -31,6 +31,12 @@ public sealed class RangeTestServer : IDisposable
     /// NIC vs one fast NIC for adaptive work-stealing tests).</summary>
     public string? SlowRemotePrefix;
     public int SlowChunkDelayMs;
+
+    /// <summary>When > 0, all per-chunk throttling is lifted once this many milliseconds have
+    /// passed since Start() — simulates a server that frees capacity mid-download. Only new
+    /// HTTP requests (i.e. newly opened segment connections) get the fast path.</summary>
+    public int ThrottleForMs;
+    private long _startedUtcMs;
     private int _servedRequests;
     public IReadOnlyCollection<string> SeenRemoteAddresses => _seenRemoteAddresses.ToList();
     private readonly ConcurrentBag<string> _seenRemoteAddresses = new();
@@ -56,6 +62,7 @@ public sealed class RangeTestServer : IDisposable
         _listener.Prefixes.Add(prefix);
         _listener.Start();
         BaseUrl = $"{prefix}{FileName}";
+        _startedUtcMs = Environment.TickCount64;
         _loop = Task.Run(() => ListenLoop(_cts.Token));
     }
 
@@ -202,6 +209,10 @@ public sealed class RangeTestServer : IDisposable
 
     private int DelayForRemote(HttpListenerContext ctx)
     {
+        // Server freed capacity: everything is fast from now on (new requests only).
+        if (ThrottleForMs > 0 && Environment.TickCount64 - _startedUtcMs > ThrottleForMs)
+            return 0;
+
         if (SlowRemotePrefix is null || SlowChunkDelayMs <= 0)
             return ChunkDelayMs;
         var remote = ctx.Request.RemoteEndPoint?.Address.ToString() ?? "";

@@ -56,11 +56,7 @@ public sealed class DownloadJob : IDisposable
     private int[] _activePerSlot = Array.Empty<int>();        // in-flight workers per adapter slot
     private readonly object _workerGate = new();
     private readonly List<Task> _workers = new();             // includes scaler-spawned workers
-    private readonly double[] _speedWindow = new double[3];   // recent aggregate speeds (bytes/s)
-    private int _speedWindowFilled;
-    private double _speedAtLastSplit;                          // aggregate speed when the last split round applied
-    private int _pendingSplits;                                // splits awaiting their speed evaluation
-    private bool _scalingExhausted;                            // last splits brought no gain — server is the cap
+    private ScaleController? _scale;                           // v2: multi-tick evaluation, never permanently stuck
     private CancellationTokenSource? _scalerCts;
     private Task? _scalerTask;
     private CancellationToken _runCt;
@@ -157,7 +153,6 @@ public sealed class DownloadJob : IDisposable
         _lastSampleReceived = 0;
         _lastSampleTimestamp = Stopwatch.GetTimestamp();
         _lastPerAdapterTimestamp = _lastSampleTimestamp;
-        _speedWindowFilled = 0;
         StartProgressTimer();
         RaiseStatus();
         _runTask = RunAsync(_cts.Token);
@@ -560,10 +555,7 @@ public sealed class DownloadJob : IDisposable
         if (!Options.AdaptiveScaling || BindAddresses.Count == 0 || _totalSize <= 0)
             return;
 
-        _speedWindowFilled = 0;
-        _speedAtLastSplit = 0;
-        _pendingSplits = 0;
-        _scalingExhausted = false;
+        _scale = new ScaleController();
 
         _scalerCts?.Dispose();
         _scalerCts = CancellationTokenSource.CreateLinkedTokenSource(_runCt);
@@ -596,45 +588,26 @@ public sealed class DownloadJob : IDisposable
         if (_pauseRequested || _runCt.IsCancellationRequested)
             return;
 
-        double speed = SpeedBps;
-        bool rampSplit;      // aggressive ramp (splits are still buying bandwidth / flat-lined)
-        bool hasIdleSlot;    // some adapter finished everything — work stealing is a pure win
-        lock (_sync)
-        {
-            // Evaluate the previous split round first: did the extra connections help?
-            if (_pendingSplits > 0)
-            {
-                if (speed >= _speedAtLastSplit * 1.08)
-                    rampSplit = true;             // connections are still buying bandwidth — keep adding
-                else
-                {
-                    _scalingExhausted = true;     // no gain — the server/pipe is the bottleneck now
-                    rampSplit = false;
-                }
-                _pendingSplits = 0;
-            }
-            else if (!_scalingExhausted &&
-                     _speedWindowFilled == _speedWindow.Length &&
-                     speed > 0 && speed < _speedWindow[0] * 1.12)
-            {
-                rampSplit = true;                 // throughput flat-lined with work remaining
-            }
-            else
-            {
-                rampSplit = false;
-            }
+        var scale = _scale;
+        if (scale is null)
+            return;
 
-            // Push the current sample into the rolling window.
-            for (int i = 1; i < _speedWindow.Length; i++)
-                _speedWindow[i - 1] = _speedWindow[i];
-            _speedWindow[^1] = speed;
-            _speedWindowFilled = Math.Min(_speedWindowFilled + 1, _speedWindow.Length);
-        }
+        double speed = SpeedBps;
+        bool wasExhausted = scale.Exhausted;
+        var decision = scale.OnTick(speed);
+
+        if (!wasExhausted && scale.Exhausted)
+            Diagnose("adaptive_stall",
+                "extra connections stopped buying bandwidth — standing down, will re-probe periodically");
+        if (wasExhausted && decision.Impulse == ScaleImpulse.ReProbe)
+            Diagnose("adaptive_probe", "re-probing server capacity with fresh connections");
+
+        bool wantSplits = decision.Impulse is ScaleImpulse.AddConnections or ScaleImpulse.ReProbe;
 
         // Idle-slot stealing must never wait for the plateau window: the fast NIC
         // finishing its share while slow segments crawl is a pure rebalance win.
-        hasIdleSlot = HasIdleSlot();
-        if (!rampSplit && !hasIdleSlot)
+        bool hasIdleSlot = HasIdleSlot();
+        if (!wantSplits && !hasIdleSlot)
             return;
 
         List<PendingSegmentInfo> pending;
@@ -650,19 +623,25 @@ public sealed class DownloadJob : IDisposable
             active = (int[])_activePerSlot.Clone();
         }
 
+        int wanted = decision.Splits is > 0 and var n ? Math.Clamp(n, 1, 8) : 2;
         var splits = AdaptiveScalePolicy.PlanSplits(
             pending, _clients.Count, active, currentCount,
-            Options.MaxSegmentsCap, Options.MinSegmentSizeBytes, throughputPlateau: rampSplit);
-        if (splits.Count == 0)
-            return;
+            Options.MaxSegmentsCap, Options.MinSegmentSizeBytes,
+            throughputPlateau: true, maxPlateauSplits: wanted);
 
-        foreach (var split in splits)
-            ApplySplit(split.Handle, split.TargetSlot);
-
-        lock (_sync)
+        if (splits.Count > 0)
         {
-            _speedAtLastSplit = speed;
-            _pendingSplits = splits.Count;
+            foreach (var split in splits)
+                ApplySplit(split.Handle, split.TargetSlot);
+
+            if (wantSplits)
+                scale.ConfirmRound(splits.Count, speed);   // evaluation window starts now
+        }
+        else if (wantSplits)
+        {
+            // Nothing splittable (cap reached or segments too small) — never enter
+            // an evaluation that could never be judged.
+            scale.CancelRound();
         }
     }
 

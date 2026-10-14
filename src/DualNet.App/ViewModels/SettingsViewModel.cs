@@ -61,6 +61,8 @@ public partial class SettingsViewModel : ObservableObject
         SpeedTestUrl = AppServices.Settings.SpeedTestUrl;
         SearchEngineIndex = AppServices.Settings.SearchEngine;
         AdaptiveScaling = AppServices.Settings.AdaptiveScaling;
+        MaxConnections = AppServices.Settings.MaxConnectionsPerDownload;
+        UseRealBrowser = AppServices.Settings.UseRealBrowser;
         SentryDsn = string.IsNullOrWhiteSpace(AppServices.Settings.SentryDsn)
             ? SentrySetup.DefaultDsn
             : AppServices.Settings.SentryDsn;
@@ -85,6 +87,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string speedTestUrl = "";
     [ObservableProperty] private int searchEngineIndex;
     [ObservableProperty] private bool adaptiveScaling = true;
+    [ObservableProperty] private double? maxConnections = 32;
+    [ObservableProperty] private bool useRealBrowser = true;
     [ObservableProperty] private string sentryDsn = "";
     [ObservableProperty] private string sentryTestResult = "";
 
@@ -126,6 +130,8 @@ public partial class SettingsViewModel : ObservableObject
         s.SpeedTestUrl = SpeedTestUrl.Trim();
         s.SearchEngine = Math.Clamp(SearchEngineIndex, 0, DualNet.Core.Engine.Browser.SearchEngines.Names.Length - 1);
         s.AdaptiveScaling = AdaptiveScaling;
+        s.MaxConnectionsPerDownload = (int)Math.Clamp(MaxConnections ?? s.MaxConnectionsPerDownload, 4, 64);
+        s.UseRealBrowser = UseRealBrowser;
         s.SentryDsn = SentryDsn.Trim();
         AppServices.ApplySpeedLimit();
         AppServices.ApplyProxy();

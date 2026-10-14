@@ -1,12 +1,3 @@
-bin/
-obj/
-out/
-publish/
-*.user
-*.suo
-.vs/
-.idea/
-*.dualnet
-*.dualnet.json
-.DS_Store
-.avalonia-build-tasks/
+skills/
+node_modules/
+tool-results/

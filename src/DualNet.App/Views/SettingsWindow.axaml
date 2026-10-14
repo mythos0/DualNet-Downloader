@@ -72,6 +72,15 @@
       <CheckBox Content="Adaptive segment scaling — keep adding connections while combined speed improves,
                 hand work to an idle adapter (recommended for max combined speed)"
                 IsChecked="{Binding AdaptiveScaling}" />
+      <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding AdaptiveScaling}">
+        <NumericUpDown Minimum="4" Maximum="64" Increment="4" Value="{Binding MaxConnections}" Width="130" />
+        <TextBlock Text="max connections per download (4–64, default 32)" Classes="hint" VerticalAlignment="Center" />
+      </StackPanel>
+
+      <TextBlock Text="Browser engine" Classes="sectionTitle" />
+      <CheckBox Content="Use the real Chromium browser in tabs (requires the WebView2 Runtime —
+                preinstalled on Windows 10/11). Off or unavailable = lightweight reader view."
+                IsChecked="{Binding UseRealBrowser}" />
 
       <TextBlock Text="Address bar search engine" Classes="sectionTitle" />
       <ComboBox ItemsSource="{Binding SearchEngineNames}" SelectedIndex="{Binding SearchEngineIndex}"

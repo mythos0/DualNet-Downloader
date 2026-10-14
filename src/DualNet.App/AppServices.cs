@@ -23,7 +23,9 @@ public static class AppServices
     public static IReadOnlyList<NetworkAdapterInfo> Adapters { get; private set; } = Array.Empty<NetworkAdapterInfo>();
     public static Window? MainWindow { get; set; }
 
-    /// <summary>Reads the persisted Sentry DSN before full app init (Sentry boots first).</summary>
+    /// <summary>Reads the persisted Sentry DSN before full app init (Sentry boots first).
+    /// A persisted DSN that belongs to a retired project is migrated to the shipped one —
+    /// sending to a rotated DSN gets rejected server-side and the dashboard looks empty.</summary>
     public static string TryLoadDsn()
     {
         try
@@ -31,9 +33,7 @@ public static class AppServices
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var dir = Path.Combine(string.IsNullOrWhiteSpace(appData) ? AppContext.BaseDirectory : appData, "DualNet");
             var settings = JsonStore.Load<AppSettings>(Path.Combine(dir, "settings.json"));
-            if (settings is null || string.IsNullOrWhiteSpace(settings.SentryDsn))
-                return SentrySetup.DefaultDsn;   // never configured — keep the shipped DSN
-            return settings.SentryDsn;
+            return SentrySetup.NormalizeDsn(settings?.SentryDsn ?? "");
         }
         catch
         {

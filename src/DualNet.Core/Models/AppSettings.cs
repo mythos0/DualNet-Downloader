@@ -59,6 +59,15 @@ public sealed class AppSettings
     /// </summary>
     public bool AdaptiveScaling { get; set; } = true;
 
+    /// <summary>Hard cap on simultaneous connections per download (4–64, default 32).</summary>
+    public int MaxConnectionsPerDownload { get; set; } = 32;
+
+    /// <summary>
+    /// Browse with the embedded real browser engine (Chromium via WebView2) when available;
+    /// off or unavailable = lightweight reader-mode browser.
+    /// </summary>
+    public bool UseRealBrowser { get; set; } = true;
+
     /// <summary>Search engine used when a non-URL is typed in the address bar (index into SearchEngines.Names).</summary>
     public int SearchEngine { get; set; }
 

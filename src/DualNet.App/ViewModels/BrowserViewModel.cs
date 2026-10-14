@@ -4,9 +4,11 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DualNet.Core.Engine;
 using DualNet.Core.Engine.Browser;
 using DualNet.Core.Models;
 using DualNet.Core.Storage;
+using DualNet.App.Views;
 
 namespace DualNet.App.ViewModels;
 
@@ -128,21 +130,36 @@ public partial class BrowserViewModel : ObservableObject
     [ObservableProperty] private int linkFilterIndex;   // 0 = all links, 1 = files only
     [ObservableProperty] private int totalLinkCount;
     [ObservableProperty] private int fileLinkCount;
+    [ObservableProperty] private bool webActive;        // real Chromium engine attached + ready
+    [ObservableProperty] private bool webFailed;        // WebView2 init failed — reader fallback active
+    [ObservableProperty] private bool readerOverride;   // user asked for the reader view of the current page
 
-    partial void OnLinkSearchTextChanged(string value) => ApplyLinkFilter();
-    partial void OnLinkFilterIndexChanged(int value) => ApplyLinkFilter();
+    /// <summary>The real browser surface, attached by the view when supported (Windows + WebView2).</summary>
+    public RealWebView? Web { get; private set; }
 
+    /// <summary>True when the tab should create the real browser engine (Windows + setting + not failed).</summary>
+    public bool UseRealBrowserEnabled =>
+        AppServices.Settings.UseRealBrowser && RealWebView.IsSupported && !WebFailed;
+
+    public bool ShowWeb => WebActive && !ReaderOverride;
     public bool HasPageError => PageError is not null;
-    public bool ShowHome => !IsLoading && !HasPage && !HasPageError;
+    public bool ShowHome => !IsLoading && !HasPage && !HasPageError && (!ShowWeb || (AddressText ?? "").Trim().Length == 0);
+    public bool ShowReaderPage => HasPage && (!ShowWeb || ReaderOverride);
+    public bool ShowError => HasPageError && (!ShowWeb || ReaderOverride);
     public bool HasRecentUrls => RecentUrls.Count > 0;
     public bool ShowLinksPanel => HasPage && FilteredLinks.Count > 0;
     public bool HasBookmarks => BookmarkList.Count > 0;
     public bool HasVisited => VisitedList.Count > 0;
 
+    partial void OnLinkSearchTextChanged(string value) => ApplyLinkFilter();
+    partial void OnLinkFilterIndexChanged(int value) => ApplyLinkFilter();
+
     partial void OnPageErrorChanged(string? value)
     {
         OnPropertyChanged(nameof(HasPageError));
         OnPropertyChanged(nameof(ShowHome));
+        OnPropertyChanged(nameof(ShowError));
+        OnPropertyChanged(nameof(ShowReaderPage));
     }
 
     partial void OnIsLoadingChanged(bool value) => OnPropertyChanged(nameof(ShowHome));
@@ -150,12 +167,33 @@ public partial class BrowserViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(ShowLinksPanel));
         OnPropertyChanged(nameof(ShowHome));
+        OnPropertyChanged(nameof(ShowReaderPage));
     }
+
+    partial void OnWebActiveChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowWeb));
+        OnPropertyChanged(nameof(ShowHome));
+        OnPropertyChanged(nameof(ShowReaderPage));
+        OnPropertyChanged(nameof(ShowError));
+        RefreshNav();
+    }
+
+    partial void OnReaderOverrideChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowWeb));
+        OnPropertyChanged(nameof(ShowHome));
+        OnPropertyChanged(nameof(ShowReaderPage));
+        OnPropertyChanged(nameof(ShowError));
+    }
+
+    partial void OnAddressTextChanged(string value) => OnPropertyChanged(nameof(ShowHome));
 
     private readonly List<string> _backStack = new();
     private readonly List<string> _forwardStack = new();
     private CancellationTokenSource? _loadCts;
     private int _loadSeq;               // invalidates stale results when a newer navigation starts
+    private string? _pendingWebUrl;     // typed/navigated before the Chromium engine finished attaching
     private const int MaxStackDepth = 60;
 
     public BrowserViewModel(Func<IReadOnlyList<System.Net.IPAddress>> binds,
@@ -167,6 +205,95 @@ public partial class BrowserViewModel : ObservableObject
         RefreshChrome();
     }
 
+    // ---- real browser engine (WebView2) ------------------------------------------------------
+
+    /// <summary>Called by the view once it knows this tab should host the real engine.</summary>
+    public void AttachWeb(RealWebView web)
+    {
+        if (Web is not null)
+            return;
+        Web = web;
+
+        web.Ready += () => Dispatcher.UIThread.Post(() =>
+        {
+            WebActive = true;
+            if (!string.IsNullOrWhiteSpace(_pendingWebUrl))
+            {
+                var url = _pendingWebUrl;
+                _pendingWebUrl = null;
+                web.Navigate(url);
+            }
+        });
+
+        web.NavigationStarting += url => Dispatcher.UIThread.Post(() =>
+        {
+            // The engine started loading — mirror it exactly like a typed navigation.
+            var current = (AddressText ?? "").Trim();
+            if (current.Length > 0 && current != url && (_backStack.Count == 0 || _backStack[^1] != current))
+            {
+                _backStack.Add(current);
+                while (_backStack.Count > MaxStackDepth)
+                    _backStack.RemoveAt(0);
+            }
+            AddressText = url;
+            PageError = null;
+            HasPage = false;
+            ReaderOverride = false;
+            IsLoading = true;
+            StatusText = $"Loading {TrimForStatus(url)}…";
+        });
+
+        web.NavigationCompleted += url => Dispatcher.UIThread.Post(() =>
+        {
+            IsLoading = false;
+            PageError = null;
+            StatusText = PageTitle.Length > 0 ? PageTitle : TrimForStatus(url);
+            if (url.Length > 0 && !url.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
+            {
+                _store?.AddVisited(url, PageTitle.Length > 0 ? PageTitle : url);
+                RefreshChrome();
+            }
+        });
+
+        web.TitleChanged += title => Dispatcher.UIThread.Post(() => PageTitle = title ?? "");
+        web.HistoryChanged += () => Dispatcher.UIThread.Post(RefreshNav);
+
+        web.DownloadStarting += (url, name) => Dispatcher.UIThread.Post(() =>
+        {
+            // Real-browser downloads ride the same dual-NIC segment engine as everything else.
+            _startDownload(url);
+            StatusText = $"⤓ Download started: {(name.Length > 0 ? name : TrimForStatus(url))}";
+            _store?.AddVisited(url, name.Length > 0 ? name : url);
+            RefreshChrome();
+        });
+
+        web.InitializationFailed += reason => Dispatcher.UIThread.Post(() =>
+        {
+            WebActive = false;
+            WebFailed = true;
+            IsLoading = false;
+            StatusText = "Chromium engine unavailable — using the built-in reader view. " +
+                         "(Install the Evergreen WebView2 Runtime for full browsing.)";
+        });
+    }
+
+    private bool WebNavigates => UseRealBrowserEnabled && Web is not null;
+
+    [RelayCommand]
+    private Task ToggleReaderView()
+    {
+        if (ReaderOverride)
+        {
+            ReaderOverride = false;
+            return Task.CompletedTask;
+        }
+        var url = (AddressText ?? "").Trim();
+        if (url.Length == 0)
+            return Task.CompletedTask;
+        ReaderOverride = true;
+        return FetchReaderAsync(url);
+    }
+
     // ---- navigation --------------------------------------------------------------------------
 
     [RelayCommand]
@@ -175,6 +302,11 @@ public partial class BrowserViewModel : ObservableObject
     [RelayCommand]
     private Task GoBack()
     {
+        if (WebNavigates && Web!.IsReady && Web.CanGoBack)
+        {
+            Web.GoBack();
+            return Task.CompletedTask;
+        }
         if (_backStack.Count == 0) return Task.CompletedTask;
         var current = (AddressText ?? "").Trim();
         if (current.Length > 0)
@@ -187,6 +319,11 @@ public partial class BrowserViewModel : ObservableObject
     [RelayCommand]
     private Task GoForward()
     {
+        if (WebNavigates && Web!.IsReady && Web.CanGoForward)
+        {
+            Web.GoForward();
+            return Task.CompletedTask;
+        }
         if (_forwardStack.Count == 0) return Task.CompletedTask;
         var current = (AddressText ?? "").Trim();
         if (current.Length > 0)
@@ -197,22 +334,53 @@ public partial class BrowserViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task Reload() =>
-        (AddressText ?? "").Trim().Length == 0 ? Task.CompletedTask : GoCore(Resolve(AddressText), pushCurrent: false);
+    private Task Reload()
+    {
+        var url = (AddressText ?? "").Trim();
+        if (url.Length == 0) return Task.CompletedTask;
+        if (WebNavigates && Web!.IsReady)
+        {
+            Web.Reload();
+            return Task.CompletedTask;
+        }
+        return GoCore(url, pushCurrent: false);
+    }
 
     [RelayCommand]
     private void Stop()
     {
         try { _loadCts?.Cancel(); } catch { }
+        if (WebNavigates)
+            Web!.Stop();
     }
 
     [RelayCommand]
     private void GoHome()
     {
         var current = (AddressText ?? "").Trim();
+        if (WebNavigates)
+        {
+            if (current.Length > 0)
+                _backStack.Add(current);
+            AddressText = "";
+            PageTitle = "";
+            PageError = null;
+            HasPage = false;
+            ReaderOverride = false;
+            IsLoading = false;
+            _pendingWebUrl = null;
+            try { _loadCts?.Cancel(); } catch { }
+            Web!.Navigate("about:blank");
+            StatusText = "Type a link or a search, press Enter.";
+            RefreshNav();
+            RefreshChrome();
+            return;
+        }
+
         if (current.Length > 0)
             _backStack.Add(current);
         _forwardStack.Clear();
+        ReaderOverride = false;
         _loadSeq++;   // invalidate any in-flight load result
         try { _loadCts?.Cancel(); } catch { }
         AddressText = "";
@@ -251,6 +419,28 @@ public partial class BrowserViewModel : ObservableObject
         }
         RefreshNav();
 
+        // Real browser engine: Chromium does the loading; we only mirror state.
+        if (WebNavigates)
+        {
+            ReaderOverride = false;
+            AddressText = url;
+            PageError = null;
+            HasPage = false;
+            IsLoading = true;
+            StatusText = $"Loading {TrimForStatus(url)}…";
+            if (Web!.IsReady)
+                Web.Navigate(url);
+            else
+                _pendingWebUrl = url;   // engine still attaching — fires when Ready
+            return;
+        }
+
+        await FetchReaderAsync(url).ConfigureAwait(false);
+    }
+
+    /// <summary>Reader-mode fetch: used when the real engine is off/unavailable, or on demand.</summary>
+    private async Task FetchReaderAsync(string url)
+    {
         try { _loadCts?.Cancel(); } catch { }
         var cts = new CancellationTokenSource();
         _loadCts = cts;
@@ -470,6 +660,12 @@ public partial class BrowserViewModel : ObservableObject
 
     private void RefreshNav()
     {
+        if (WebNavigates && Web!.IsReady)
+        {
+            CanGoBack = Web.CanGoBack;
+            CanGoForward = Web.CanGoForward;
+            return;
+        }
         CanGoBack = _backStack.Count > 0;
         CanGoForward = _forwardStack.Count > 0;
     }

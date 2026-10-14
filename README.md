@@ -27,21 +27,29 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
   each segment through the cable *and* the radio at the same time.
 - **Automatic file splitting** — 8 segments below 500 MB, 16 above, never smaller than 2 MB
   each, interleaved across adapters (segment *i* → adapter *i % n*).
-- **Full embedded browser in every tab** — every network tab (Combined, Ethernet, Wi-Fi)
-  contains a real browser pane fetched **through that tab's own adapters**: address bar with
-  search fallback (DuckDuckGo Lite / Bing / Google), Back ◀ / Forward ▶ / Reload ↻ / Stop ✕ /
-  Home ⌂, **reader-view page rendering** (headings, paragraphs, lists, quotes, code, images,
-  tables), a **Links panel** listing every link on the page with a `Files only` filter and
-  one-click **⤓ download through the tab's network**, automatic **file detection** (navigating
-  to a file starts the segmented download immediately), **bookmarks** (🔖 / ☆), **browser
-  history** (🕘), address-bar **suggestions**, `Ctrl+L`, and **↗ open in system browser** as a
-  fallback for JavaScript-heavy sites.
-- **Adaptive segment scaling (max combined speed)** — while a download runs, the engine keeps
-  evaluating throughput: if extra connections buy more bandwidth it **splits the largest
-  remaining segments and opens new connections** (up to 32), and when one adapter finishes its
-  share it **steals work from the busy adapter** so the fast NIC never idles. This is what
-  lets Combined downloads actually saturate Ethernet + Wi-Fi even when the server caps
-  throughput per connection (IDM-style dynamic file segmentation).
+- **Real Chromium browser in every tab** (v1.4.0) — network tabs host **Microsoft Edge
+  WebView2** (the same engine as Edge/Chrome: full JavaScript, CSS, cookies, logins, PDFs).
+  Every managed **download is intercepted** and routed into DualNet's dual-NIC segment engine,
+  so files grabbed while browsing still use Ethernet + Wi-Fi simultaneously. Pop-ups and
+  target=_blank stay in-tab. On machines without the WebView2 Runtime (or when disabled in
+  settings) tabs fall back to the **built-in reader browser**, fetched through the tab's own
+  adapters: address bar with search fallback (DuckDuckGo Lite / Bing / Google), Back ◀ /
+  Forward ▶ / Reload ↻ / Stop ✕ / Home ⌂, reader-view rendering (headings, paragraphs, lists,
+  quotes, code, images, tables), a **Links panel** with a `Files only` filter and one-click
+  **⤓ download through the tab's network**, automatic **file detection**, **bookmarks** (🔖 / ☆),
+  **browser history** (🕘), address-bar suggestions, `Ctrl+L`, **📖 reader view** on demand, and
+  **↗ open in system browser** as a last resort.
+- **Adaptive segment scaling v2 (max combined speed)** — while a download runs, the engine
+  keeps evaluating throughput with EMA-smoothed multi-second windows: if extra connections buy
+  more bandwidth it **splits the largest remaining segments and opens new connections** (up to
+  64, default cap 32 — configurable in settings), escalates while the gains keep coming, and
+  when one adapter finishes its share it **steals work from the busy adapter** so the fast NIC
+  never idles. A scaler that hits a server-side cap **stands down gracefully but re-probes
+  every ~30 s** — when the server frees capacity (or you leave a hotspot), the download
+  automatically speeds back up. Combined downloads show the **live per-NIC Mbps share** right
+  on the download card, so you can always verify both networks are pulling. This is what lets
+  Combined downloads actually saturate Ethernet + Wi-Fi even when the server caps throughput
+  per connection (IDM-style dynamic file segmentation).
 - **Clipboard link watcher** — copy a link anywhere and a one-click **⤓ Download** banner
   appears in the status bar (toggle 📋 in the toolbar).
 - **Bulk actions** — ⏸ pause all, ▶ resume all, ↻ retry failed, 🧹 clear finished — per tab.
@@ -88,13 +96,18 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
 - **Queue reordering** — move waiting downloads up/down (IDM-style priority).
 - **Sentry telemetry** — logs, metrics (`download_started/completed/canceled`,
   `download_duration`, `download_speed`) and global crash reporting wired in from launch.
+  The shipped DSN tracks the current project; stale persisted DSNs from retired projects are
+  migrated automatically at startup (a rotated DSN is rejected server-side, which used to look
+  like "nothing appears in Sentry"). Settings → Telemetry can point anywhere else, and
+  **Send test event** verifies the pipeline end-to-end.
 - **Zero install** — one self-contained `.exe`, runs on any Windows 10/11 x64 machine.
 
 ## Install
 
-Download **`DualNetDownloader-1.3.0-win-x64.exe`** from the
+Download **`DualNetDownloader-1.4.0-win-x64.exe`** from the
 [Releases page](https://github.com/mythos0/DualNet-Downloader/releases) and run it —
-no .NET runtime or installer required.
+no .NET runtime or installer required. Full browsing uses the **Evergreen WebView2 Runtime**
+(preinstalled on Windows 10/11; the app falls back to the reader browser when absent).
 
 ## Usage
 
@@ -103,9 +116,10 @@ no .NET runtime or installer required.
    - **🔌 <Ethernet name>** — downloads use only the Ethernet cable.
    - **📶 <Wi-Fi name>** — downloads use only the Wi-Fi adapter.
    - **🕘 History** — past downloads.
-2. **Browse or download from the address bar** — Enter opens the page in the tab's reader
-   view (Back ◀ / Forward ▶ / Reload ↻ / Stop ✕ / Home ⌂ navigate like a real browser); when
-   you land on a file, the segmented download starts automatically over that tab's network.
+2. **Browse or download from the address bar** — Enter opens the page in the tab's real
+   Chromium browser (or the reader view when WebView2 is unavailable; Back ◀ / Forward ▶ /
+   Reload ↻ / Stop ✕ / Home ⌂ / 📖 reader navigate like any browser); when you land on a
+   file, the segmented download starts automatically over that tab's network.
    **⤓ Download** queues the links directly without browsing. Non-URL input searches via
    DuckDuckGo Lite / Bing / Google (choose in settings). Multiple links (one per line) become
    multiple downloads. The **Links panel** on the right lists every link of the open page —

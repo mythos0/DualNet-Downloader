@@ -17,20 +17,46 @@ namespace DualNet.App;
 /// </summary>
 public static class SentrySetup
 {
+    /// <summary>
+    /// The project DSN this build ships with. Rotated at v1.4.0: the previous DSN pointed
+    /// at a deleted/rotated project, so events were silently rejected and the dashboard
+    /// looked empty. Override at runtime in Settings → Telemetry if yours differs.
+    /// </summary>
     public const string DefaultDsn =
-        "https://354263622957c3bcf410a3cb253b5bb9@o4512147759235072.ingest.us.sentry.io/4512249722241024";
+        "https://960688915c323a44c9569f8d9c189eee@o4512147759235072.ingest.us.sentry.io/4512249743147008";
+
+    /// <summary>DSNs of retired projects. A persisted settings value matching one of these
+    /// is migrated to <see cref="DefaultDsn"/> at startup instead of silently black-holing events.</summary>
+    public static readonly string[] LegacyDsns =
+    {
+        "https://354263622957c3bcf410a3cb253b5bb9@o4512147759235072.ingest.us.sentry.io/4512249722241024",
+    };
 
     private static IDisposable? _sentrySdk;
     private static bool _initialized;
     private static string _dsn = DefaultDsn;
 
     public static string VersionText =>
-        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.3.0";
+        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.4.0";
 
     public static string ActiveDsn => _dsn;
 
     /// <summary>True when telemetry is configured with a non-empty DSN.</summary>
     public static bool IsConfigured => _dsn.Length > 0;
+
+    /// <summary>
+    /// Maps a persisted DSN to the one that should actually be used: empty → shipped default,
+    /// legacy (retired project) → shipped default, otherwise the stored value as-is.
+    /// </summary>
+    public static string NormalizeDsn(string stored)
+    {
+        var trimmed = (stored ?? "").Trim();
+        if (trimmed.Length == 0)
+            return DefaultDsn;
+        if (LegacyDsns.Contains(trimmed, StringComparer.Ordinal))
+            return DefaultDsn;   // stale project — events would be silently rejected
+        return trimmed;
+    }
 
     private static KeyValuePair<string, object> Tag(string k, object v) => new(k, v);
 

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <AssemblyName>DualNetDownloader</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
@@ -17,6 +17,8 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>DualNet Downloader</Product>
     <Company>DualNet</Company>
+    <!-- WebView2Loader.dll (native) must be extractable from the single-file bundle on Windows. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,6 +27,7 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.2" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.3.2" Condition="'$(Configuration)' == 'Debug'" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="Sentry" Version="6.12.1" />
   </ItemGroup>
 

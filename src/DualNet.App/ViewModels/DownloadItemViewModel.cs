@@ -241,6 +241,22 @@ internal static class DownloadJobBadgeExtensions
     {
         var segs = job.SegmentCount;
         var adapters = Math.Max(1, job.BindAddresses.Count);
-        return segs > 1 ? $"Downloading · {segs} segments on {adapters} network{(adapters > 1 ? "s" : "")}" : "Downloading";
+        string text = segs > 1 ? $"Downloading · {segs} connections on {adapters} network{(adapters > 1 ? "s" : "")}" : "Downloading";
+
+        // Live per-NIC share so Combined downloads are fully transparent:
+        // "Ethernet 45.2 + Wi-Fi 44.8 Mbps" — a 0.0 on one NIC means that route carries nothing.
+        if (adapters > 1 && job.PerAdapterSpeedBps is { Count: > 1 } speeds)
+        {
+            double total = 0;
+            var parts = new List<string>(speeds.Count);
+            for (int i = 0; i < speeds.Count && i < adapters; i++)
+            {
+                total += speeds[i];
+                parts.Add($"{speeds[i] * 8 / 1_000_000:0.#}");
+            }
+            if (total > 0)
+                text += $" · {string.Join(" + ", parts)} Mbps per NIC";
+        }
+        return text;
     }
 }

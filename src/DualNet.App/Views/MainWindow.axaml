@@ -151,7 +151,7 @@
           <TextBlock Text="total:" Classes="hint" VerticalAlignment="Center" />
           <TextBlock Text="{Binding TotalSpeedText}" FontWeight="Bold" FontSize="13"
                      VerticalAlignment="Center" />
-          <TextBlock Text="v1.3.0" Classes="hint" VerticalAlignment="Center" />
+          <TextBlock Text="v1.4.0" Classes="hint" VerticalAlignment="Center" />
         </StackPanel>
       </Grid>
     </Border>

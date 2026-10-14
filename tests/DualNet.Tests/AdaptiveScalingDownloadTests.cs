@@ -91,12 +91,13 @@ public class AdaptiveScalingDownloadTests
     {
         // 127.0.0.1 = slow radio (heavy per-connection delay), 127.0.0.2 = fast cable.
         // The fast adapter finishes its interleaved half almost instantly; work stealing
-        // must move most of the remaining bytes onto it.
-        var data = RandomData(6 * 1024 * 1024);
+        // must move most of the remaining bytes onto it. (Generous margins: the slow
+        // phase must long outlast any machine-load jitter in CI.)
+        var data = RandomData(12 * 1024 * 1024);
         using var server = new RangeTestServer(data)
         {
             SlowRemotePrefix = "127.0.0.1",
-            SlowChunkDelayMs = 150,        // ≈0.43 MB/s per slow connection
+            SlowChunkDelayMs = 250,        // ≈0.26 MB/s per slow connection
         };
         server.Start();
 
@@ -148,6 +149,46 @@ public class AdaptiveScalingDownloadTests
             AssertCompleted(job);
             Assert.Equal(8, job.SegmentCount);   // static plan — never grows
             Assert.Equal(Convert.ToHexString(SHA256.HashData(data)), Sha256File(job.FilePath));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StoodDownScaler_Reprobes_WhenServerFreesCapacity()
+    {
+        // Regression for the v1 real-world failure: the scaler stood down permanently after
+        // ONE failed 2-second evaluation, so downloads never grew past the initial segment
+        // plan — a server that frees capacity mid-download was never noticed again.
+        //
+        // Here the server throttles every connection for the first 8 seconds, then goes fast.
+        // The scaler must: plateau → probe → (still slow) stand down → cool down → re-probe —
+        // and once the fast path is available, ramp the connection count past the initial 8.
+        var data = RandomData(80 * 1024 * 1024);
+        using var server = new RangeTestServer(data) { ChunkDelayMs = 150, ThrottleForMs = 8_000 };
+        server.Start();
+
+        var dir = NewTempDir();
+        try
+        {
+            var options = ScalingOptions(minSegment: 256 * 1024, scaleIntervalMs: 100);
+            var binds = new[] { IPAddress.Loopback, IPAddress.Parse("127.0.0.2") };
+            var job = new DownloadJob(server.BaseUrl, binds, new DownloadScope("All", new List<string>()), dir, options);
+
+            var diagnostics = new System.Collections.Concurrent.ConcurrentBag<string>();
+            job.DiagnosticEvent += (_, kind, _) => diagnostics.Add(kind);
+
+            job.Start();
+            await job.Completion.WaitAsync(TimeSpan.FromSeconds(150));
+
+            AssertCompleted(job);
+            Assert.Equal(Convert.ToHexString(SHA256.HashData(data)), Sha256File(job.FilePath));
+
+            Assert.True(job.SegmentCount > 8,
+                $"scaler never recovered after the server freed capacity: SegmentCount={job.SegmentCount}");
+            Assert.Contains("adaptive_scale", diagnostics);
         }
         finally
         {

@@ -59,8 +59,8 @@ public sealed class DownloadOptions
     /// <summary>Copy buffer size per stream.</summary>
     public int BufferSizeBytes { get; set; } = 256 * 1024;
 
-    /// <summary>Upper cap for auto-planned segments.</summary>
-    public int MaxSegmentsCap { get; set; } = 32;
+    /// <summary>Upper cap for auto-planned segments (overridden by AppSettings.MaxConnectionsPerDownload).</summary>
+    public int MaxSegmentsCap { get; set; } = 48;
 
     /// <summary>
     /// Dynamic segment scaling (IDM-style): monitors throughput and keeps adding

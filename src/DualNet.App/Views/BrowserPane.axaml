@@ -16,6 +16,9 @@
 
     <Panel Grid.Row="1">
 
+      <!-- ============ Real browser engine (Chromium / WebView2) ============ -->
+      <ContentControl x:Name="WebHost" IsVisible="{Binding ShowWeb}" />
+
       <!-- ============ Home / start page ============ -->
       <StackPanel IsVisible="{Binding ShowHome}" HorizontalAlignment="Center"
                   Margin="0,44,0,0" Spacing="8" MaxWidth="620">
@@ -24,7 +27,7 @@
         </Border>
         <TextBlock Text="DualNet Downloader" FontSize="23" FontWeight="Bold" TextAlignment="Center" />
         <TextBlock Classes="hint" TextAlignment="Center" TextWrapping="Wrap"
-                   Text="Type a link or a search in the address bar above and press Enter. Pages open in this reader view over the tab's own network; when you land on a file, it is split into segments and downloaded over Ethernet + Wi-Fi simultaneously." />
+                   Text="Type a link or a search in the address bar above and press Enter. Pages open in the built-in Chromium browser (Windows + WebView2) or the reader view; when you land on a file, it is split into segments and downloaded over Ethernet + Wi-Fi simultaneously." />
         <TextBlock Classes="hint" TextAlignment="Center" Margin="0,10,0,2"
                    IsVisible="{Binding HasRecentUrls}"
                    Text="Recent pages and files — click to reopen:" />
@@ -44,8 +47,8 @@
         </ItemsControl>
       </StackPanel>
 
-      <!-- ============ Error page ============ -->
-      <StackPanel IsVisible="{Binding HasPageError}" HorizontalAlignment="Center"
+      <!-- ============ Error page (reader mode / engine fallback) ============ -->
+      <StackPanel IsVisible="{Binding ShowError}" HorizontalAlignment="Center"
                   Margin="0,60,0,0" Spacing="10" MaxWidth="560">
         <TextBlock Text="⚠" FontSize="42" HorizontalAlignment="Center"
                    Foreground="{DynamicResource DnWarnBrush}" />
@@ -59,8 +62,8 @@
         </StackPanel>
       </StackPanel>
 
-      <!-- ============ Rendered page + links panel ============ -->
-      <Grid IsVisible="{Binding HasPage}" ColumnDefinitions="*,Auto,310">
+      <!-- ============ Rendered reader page + links panel ============ -->
+      <Grid IsVisible="{Binding ShowReaderPage}" ColumnDefinitions="*,Auto,310">
 
         <ScrollViewer Grid.Column="0">
           <StackPanel MaxWidth="760" Margin="18,10,18,20">
