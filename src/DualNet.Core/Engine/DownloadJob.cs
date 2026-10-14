@@ -51,6 +51,20 @@ public sealed class DownloadJob : IDisposable
     private bool _filePathClaimed;
     private bool _disposed;
 
+    // Dynamic segment scaling (IDM-style): keeps adding connections while throughput
+    // improves and hands work to adapters that run out of segments.
+    private int[] _activePerSlot = Array.Empty<int>();        // in-flight workers per adapter slot
+    private readonly object _workerGate = new();
+    private readonly List<Task> _workers = new();             // includes scaler-spawned workers
+    private readonly double[] _speedWindow = new double[3];   // recent aggregate speeds (bytes/s)
+    private int _speedWindowFilled;
+    private double _speedAtLastSplit;                          // aggregate speed when the last split round applied
+    private int _pendingSplits;                                // splits awaiting their speed evaluation
+    private bool _scalingExhausted;                            // last splits brought no gain — server is the cap
+    private CancellationTokenSource? _scalerCts;
+    private Task? _scalerTask;
+    private CancellationToken _runCt;
+
     private readonly string? _authUser;
     private readonly string? _authPassword;
 
@@ -143,6 +157,7 @@ public sealed class DownloadJob : IDisposable
         _lastSampleReceived = 0;
         _lastSampleTimestamp = Stopwatch.GetTimestamp();
         _lastPerAdapterTimestamp = _lastSampleTimestamp;
+        _speedWindowFilled = 0;
         StartProgressTimer();
         RaiseStatus();
         _runTask = RunAsync(_cts.Token);
@@ -180,6 +195,7 @@ public sealed class DownloadJob : IDisposable
 
     private async Task RunAsync(CancellationToken ct)
     {
+        _runCt = ct;
         try
         {
             EnsureClients();
@@ -291,6 +307,7 @@ public sealed class DownloadJob : IDisposable
             _perAdapterBytes = new long[_clients.Count];
             _perAdapterSpeed = new double[_clients.Count];
             _lastPerAdapterSample = new long[_clients.Count];
+            _activePerSlot = new int[_clients.Count];
             _lastPerAdapterTimestamp = Stopwatch.GetTimestamp();
         }
     }
@@ -394,8 +411,15 @@ public sealed class DownloadJob : IDisposable
 
         if (_rangeSupported && _totalSize > 0)
         {
+            int adapterCount = Math.Max(1, BindAddresses.Count);
             _segments = SegmentPlanner.Plan(_totalSize, true, Options)
-                .Select(r => new SegmentState { Start = r.Start, End = r.End, Written = 0 })
+                .Select((r, i) => new SegmentState
+                {
+                    Start = r.Start,
+                    End = r.End,
+                    Written = 0,
+                    Slot = SegmentPlanner.AssignAdapter(i, adapterCount)
+                })
                 .ToList();
         }
         else
@@ -456,23 +480,23 @@ public sealed class DownloadJob : IDisposable
 
     private async Task RunSegmentedAsync(CancellationToken ct)
     {
-        var workers = new List<Task>();
-        int adapterCount = Math.Max(1, BindAddresses.Count);
+        // Spawn one worker per unfinished segment. Each worker writes to its own file
+        // handle and picks its HttpClient from the segment's adapter slot.
+        List<SegmentState> initial;
+        lock (_sync)
+            initial = _segments.Where(s => !s.IsComplete).ToList();
 
-        for (int i = 0; i < _segments.Count; i++)
+        foreach (var segment in initial)
+            _ = SpawnWorker(segment, ct);
+
+        StartScaler();
+        try
         {
-            var segment = _segments[i];
-            if (segment.IsComplete) continue;
-
-            int adapterSlot = SegmentPlanner.AssignAdapter(i, adapterCount);
-            var client = _clients[Math.Min(adapterSlot, _clients.Count - 1)];
-            int index = i;
-            workers.Add(Task.Run(() => SegmentWorkerAsync(client, adapterSlot, index, segment, ct), ct));
+            await WaitAllWorkersAsync().ConfigureAwait(false);
         }
-
-        if (workers.Count > 0)
+        finally
         {
-            await Task.WhenAll(workers).ConfigureAwait(false);
+            StopScaler();
         }
 
         var incomplete = _segments.FirstOrDefault(s => !s.IsComplete);
@@ -488,10 +512,230 @@ public sealed class DownloadJob : IDisposable
             fs.Flush();
     }
 
-    private async Task SegmentWorkerAsync(HttpClient client, int adapterSlot, int index,
+    /// <summary>
+    /// Starts one connection for a segment on its assigned adapter slot and registers
+    /// it with the worker list so <see cref="WaitAllWorkersAsync"/> tracks it. Used both
+    /// for the initial plan and by the adaptive scaler when it splits a segment.
+    /// </summary>
+    private Task SpawnWorker(SegmentState segment, CancellationToken ct)
+    {
+        int slot = Math.Clamp(segment.Slot ?? 0, 0, Math.Max(0, _clients.Count - 1));
+        var client = _clients[slot];
+        Interlocked.Increment(ref _activePerSlot[slot]);
+        var task = Task.Run(() => SegmentWorkerAsync(client, slot, segment, ct), ct);
+        lock (_workerGate)
+            _workers.Add(task);
+        return task;
+    }
+
+    /// <summary>Waits for every worker, including ones the scaler spawned mid-flight.</summary>
+    private async Task WaitAllWorkersAsync()
+    {
+        while (true)
+        {
+            Task[] snapshot;
+            lock (_workerGate)
+            {
+                _workers.RemoveAll(w => w.IsCompleted);
+                snapshot = _workers.ToArray();
+            }
+            if (snapshot.Length == 0)
+                return;
+            await Task.WhenAll(snapshot).ConfigureAwait(false);
+
+            lock (_workerGate)
+            {
+                _workers.RemoveAll(w => w.IsCompleted);
+                if (_workers.Count == 0)
+                    return;
+            }
+        }
+    }
+
+    // ---- adaptive scaling ---------------------------------------------------------------------
+
+    /// <summary>Starts the background loop that splits segments while throughput improves.</summary>
+    private void StartScaler()
+    {
+        if (!Options.AdaptiveScaling || BindAddresses.Count == 0 || _totalSize <= 0)
+            return;
+
+        _speedWindowFilled = 0;
+        _speedAtLastSplit = 0;
+        _pendingSplits = 0;
+        _scalingExhausted = false;
+
+        _scalerCts?.Dispose();
+        _scalerCts = CancellationTokenSource.CreateLinkedTokenSource(_runCt);
+        var token = _scalerCts.Token;
+        _scalerTask = Task.Run(async () =>
+        {
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    await Task.Delay(Math.Max(500, Options.ScaleIntervalMs), token).ConfigureAwait(false);
+                    TickScale();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (ObjectDisposedException) { }
+            catch { /* scaling is an optimization — never let it break a download */ }
+        }, CancellationToken.None);
+    }
+
+    private void StopScaler()
+    {
+        try { _scalerCts?.Cancel(); } catch { }
+    }
+
+    private void TickScale()
+    {
+        if (Status != DownloadStatus.Downloading || !_rangeSupported || _totalSize <= 0)
+            return;
+        if (_pauseRequested || _runCt.IsCancellationRequested)
+            return;
+
+        double speed = SpeedBps;
+        bool rampSplit;      // aggressive ramp (splits are still buying bandwidth / flat-lined)
+        bool hasIdleSlot;    // some adapter finished everything — work stealing is a pure win
+        lock (_sync)
+        {
+            // Evaluate the previous split round first: did the extra connections help?
+            if (_pendingSplits > 0)
+            {
+                if (speed >= _speedAtLastSplit * 1.08)
+                    rampSplit = true;             // connections are still buying bandwidth — keep adding
+                else
+                {
+                    _scalingExhausted = true;     // no gain — the server/pipe is the bottleneck now
+                    rampSplit = false;
+                }
+                _pendingSplits = 0;
+            }
+            else if (!_scalingExhausted &&
+                     _speedWindowFilled == _speedWindow.Length &&
+                     speed > 0 && speed < _speedWindow[0] * 1.12)
+            {
+                rampSplit = true;                 // throughput flat-lined with work remaining
+            }
+            else
+            {
+                rampSplit = false;
+            }
+
+            // Push the current sample into the rolling window.
+            for (int i = 1; i < _speedWindow.Length; i++)
+                _speedWindow[i - 1] = _speedWindow[i];
+            _speedWindow[^1] = speed;
+            _speedWindowFilled = Math.Min(_speedWindowFilled + 1, _speedWindow.Length);
+        }
+
+        // Idle-slot stealing must never wait for the plateau window: the fast NIC
+        // finishing its share while slow segments crawl is a pure rebalance win.
+        hasIdleSlot = HasIdleSlot();
+        if (!rampSplit && !hasIdleSlot)
+            return;
+
+        List<PendingSegmentInfo> pending;
+        int currentCount;
+        int[] active;
+        lock (_sync)
+        {
+            currentCount = _segments.Count;
+            pending = _segments
+                .Where(s => !s.IsComplete)
+                .Select(s => new PendingSegmentInfo(s, s.Remaining, Math.Clamp(s.Slot ?? 0, 0, Math.Max(0, _clients.Count - 1))))
+                .ToList();
+            active = (int[])_activePerSlot.Clone();
+        }
+
+        var splits = AdaptiveScalePolicy.PlanSplits(
+            pending, _clients.Count, active, currentCount,
+            Options.MaxSegmentsCap, Options.MinSegmentSizeBytes, throughputPlateau: rampSplit);
+        if (splits.Count == 0)
+            return;
+
+        foreach (var split in splits)
+            ApplySplit(split.Handle, split.TargetSlot);
+
+        lock (_sync)
+        {
+            _speedAtLastSplit = speed;
+            _pendingSplits = splits.Count;
+        }
+    }
+
+    /// <summary>True when some adapter slot has no worker and no pending segment.</summary>
+    private bool HasIdleSlot()
+    {
+        lock (_sync)
+        {
+            if (_clients.Count <= 1)
+                return false;
+            var pendingSlots = new HashSet<int>();
+            foreach (var s in _segments)
+            {
+                if (!s.IsComplete)
+                    pendingSlots.Add(Math.Clamp(s.Slot ?? 0, 0, _clients.Count - 1));
+            }
+            for (int slot = 0; slot < _clients.Count; slot++)
+            {
+                if (slot < _activePerSlot.Length && _activePerSlot[slot] <= 0 && !pendingSlots.Contains(slot))
+                    return true;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Splits one segment in two: the original worker keeps the first half (its End shrinks),
+    /// a fresh connection on <paramref name="targetSlot"/> grabs the second half immediately.
+    /// The overlap window is byte-identical content written twice at the same offsets, so the
+    /// file stays correct even if the original worker crosses the new boundary mid-read.
+    /// </summary>
+    private void ApplySplit(object handle, int targetSlot)
+    {
+        if (handle is not SegmentState segment)
+            return;
+
+        SegmentState spawned;
+        lock (_sync)
+        {
+            if (_disposed || _segments.Count >= Options.MaxSegmentsCap)
+                return;
+            if (segment.IsComplete)
+                return;
+
+            long head = segment.Start + segment.Written;   // first byte not yet downloaded
+            long remaining = segment.End - head + 1;
+            if (remaining < 2 * Options.MinSegmentSizeBytes)
+                return;
+
+            long oldEnd = segment.End;
+            long half = remaining / 2;
+            segment.End = head + half - 1;                 // original worker stops at the new boundary
+            spawned = new SegmentState { Start = head + half, End = oldEnd, Written = 0, Slot = targetSlot };
+            _segments.Add(spawned);
+        }
+
+        try
+        {
+            _ = SpawnWorker(spawned, _runCt);
+            PersistState();
+            Diagnose("adaptive_scale",
+                $"split → NIC {(Math.Clamp(spawned.Slot ?? 0, 0, Math.Max(0, _clients.Count - 1)) + 1)}/{_clients.Count}, " +
+                $"{_segments.Count} connections total");
+        }
+        catch
+        {
+            // scaling is an optimization — never break the download
+        }
+    }
+
+    private async Task SegmentWorkerAsync(HttpClient client, int adapterSlot,
                                           SegmentState segment, CancellationToken ct)
     {
-        long segmentLength = segment.End - segment.Start + 1;
         int failedAttempts = 0;
         try
         {
@@ -499,6 +743,9 @@ public sealed class DownloadJob : IDisposable
             {
                 ct.ThrowIfCancellationRequested();
 
+                // Re-read End every iteration: the adaptive scaler may shrink this segment
+                // while the worker sleeps/retries, and the worker must honor the new boundary.
+                long segmentLength = segment.End < 0 ? long.MaxValue : segment.End - segment.Start + 1;
                 long done = segment.Written;
                 if (done >= segmentLength)
                     return;
@@ -544,6 +791,11 @@ public sealed class DownloadJob : IDisposable
                         int read;
                         while ((read = await stream.ReadAsync(buffer, attemptCts.Token).ConfigureAwait(false)) > 0)
                         {
+                            // The adaptive scaler may shrink this segment mid-flight; stop at the
+                            // new boundary. (A short overlap written twice is byte-identical — safe.)
+                            if (segment.End >= 0 && done >= segment.End - segment.Start + 1)
+                                break;
+
                             // Honor the global speed cap (shared across all jobs/adapters) before writing.
                             await GlobalSpeedLimit.AcquireAsync(read, ct).ConfigureAwait(false);
                             attemptCts.CancelAfter(Options.StallTimeoutMs);   // throttling is not a stall
@@ -564,6 +816,12 @@ public sealed class DownloadJob : IDisposable
                     {
                         System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                     }
+
+                    // Complete when the CURRENT End is satisfied (covers scaler shrink);
+                    // if the connection died before even that, it is an early close — retriable.
+                    long currentLength = segment.End < 0 ? long.MaxValue : segment.End - segment.Start + 1;
+                    if (done >= currentLength)
+                        return;   // segment complete
 
                     if (done < segmentLength)
                         throw new IOException($"Connection closed early ({done}/{segmentLength} bytes).");
@@ -595,7 +853,7 @@ public sealed class DownloadJob : IDisposable
 
                 failedAttempts++;
                 if (failedAttempts > Options.RetryCount)
-                    throw new IOException($"Segment #{index + 1} failed after {Options.RetryCount} retries: {_lastError?.Message ?? "repeated errors"}");
+                    throw new IOException($"Segment [{segment.Start}..{segment.End}] failed after {Options.RetryCount} retries: {_lastError?.Message ?? "repeated errors"}");
 
                 await Task.Delay(BackoffDelay(failedAttempts), ct).ConfigureAwait(false);
             }
@@ -607,6 +865,8 @@ public sealed class DownloadJob : IDisposable
         }
         finally
         {
+            if (adapterSlot >= 0 && adapterSlot < _activePerSlot.Length)
+                Interlocked.Decrement(ref _activePerSlot[adapterSlot]);
             PersistState();
         }
     }
@@ -807,6 +1067,10 @@ public sealed class DownloadJob : IDisposable
     {
         try
         {
+            List<SegmentState> snapshot;
+            lock (_sync)
+                snapshot = _segments.ToList();   // the adaptive scaler may append concurrently
+
             var state = new PersistedDownloadState
             {
                 Id = Id,
@@ -819,7 +1083,7 @@ public sealed class DownloadJob : IDisposable
                 ScopeLabel = Scope.Label,
                 AdapterIds = Scope.AdapterIds.ToList(),
                 CreatedUtc = StartedUtc ?? DateTime.UtcNow,
-                Segments = _segments.ToList()
+                Segments = snapshot
             };
             File.WriteAllText(StateFilePath, JsonSerializer.Serialize(state, StateJsonOptions));
         }
@@ -873,10 +1137,14 @@ public sealed class DownloadJob : IDisposable
         _rangeSupported = state.RangeSupported;
         _etag = state.ETag;
         _lastModifiedUtc = state.LastModifiedUtc;
+        int adapterCount = Math.Max(1, BindAddresses.Count);
         _segments = state.Segments.Count > 0
             ? state.Segments
             : SegmentPlanner.Plan(state.TotalSize, state.RangeSupported, Options)
                 .Select(r => new SegmentState { Start = r.Start, End = r.End }).ToList();
+        // Older state files predate per-segment adapter slots — interleave them.
+        for (int i = 0; i < _segments.Count; i++)
+            _segments[i].Slot ??= SegmentPlanner.AssignAdapter(i, adapterCount);
         _stateLoadedFromDisk = true;
         ReceivedBytes = TotalProgress();
     }
@@ -950,6 +1218,9 @@ public sealed class DownloadJob : IDisposable
         if (_disposed) return;
         _disposed = true;
         StopProgressTimer();
+        try { _scalerCts?.Cancel(); } catch { }
+        try { _scalerCts?.Dispose(); } catch { }
+        _scalerCts = null;
         try { _cts?.Cancel(); } catch { }
         foreach (var c in _clients)
             try { c.Dispose(); } catch { }

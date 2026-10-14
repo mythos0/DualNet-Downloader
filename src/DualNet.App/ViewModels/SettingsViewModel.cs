@@ -59,6 +59,8 @@ public partial class SettingsViewModel : ObservableObject
         ScheduleStartText = AppServices.Settings.ScheduleStart;
         ScheduleStopText = AppServices.Settings.ScheduleStop;
         SpeedTestUrl = AppServices.Settings.SpeedTestUrl;
+        SearchEngineIndex = AppServices.Settings.SearchEngine;
+        AdaptiveScaling = AppServices.Settings.AdaptiveScaling;
         SentryDsn = string.IsNullOrWhiteSpace(AppServices.Settings.SentryDsn)
             ? SentrySetup.DefaultDsn
             : AppServices.Settings.SentryDsn;
@@ -81,8 +83,12 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string scheduleStartText = "09:00";
     [ObservableProperty] private string scheduleStopText = "23:00";
     [ObservableProperty] private string speedTestUrl = "";
+    [ObservableProperty] private int searchEngineIndex;
+    [ObservableProperty] private bool adaptiveScaling = true;
     [ObservableProperty] private string sentryDsn = "";
     [ObservableProperty] private string sentryTestResult = "";
+
+    public string[] SearchEngineNames => DualNet.Core.Engine.Browser.SearchEngines.Names;
 
     public async Task SendSentryTestEvent()
     {
@@ -118,6 +124,8 @@ public partial class SettingsViewModel : ObservableObject
         s.ScheduleStart = ScheduleStartText.Trim();
         s.ScheduleStop = ScheduleStopText.Trim();
         s.SpeedTestUrl = SpeedTestUrl.Trim();
+        s.SearchEngine = Math.Clamp(SearchEngineIndex, 0, DualNet.Core.Engine.Browser.SearchEngines.Names.Length - 1);
+        s.AdaptiveScaling = AdaptiveScaling;
         s.SentryDsn = SentryDsn.Trim();
         AppServices.ApplySpeedLimit();
         AppServices.ApplyProxy();

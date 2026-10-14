@@ -11,9 +11,9 @@ namespace DualNet.App.ViewModels;
 public enum TabKind { Combined, SingleAdapter, History }
 
 /// <summary>
-/// One browser-style tab. The address bar keeps back/forward navigation history
-/// like a web browser — "navigating" to a URL starts the download. Each tab only
-/// uses the network adapter(s) it was created for (Ethernet tab → cable, Wi-Fi tab → radio).
+/// One browser-style tab: an embedded browser (fetched over THIS tab's adapters) on top and
+/// the download queue below. Navigating to a page renders it; navigating to a file starts
+/// the download automatically. Each tab only uses the network adapter(s) it was created for.
 /// </summary>
 public partial class DownloadTabViewModel : ObservableObject
 {
@@ -23,35 +23,31 @@ public partial class DownloadTabViewModel : ObservableObject
     public TabKind Kind { get; }
     public NetworkAdapterInfo? Adapter { get; }
     public string ScopeLabel { get; }
+    public BrowserViewModel Browser { get; }
 
     public ObservableCollection<DownloadItemViewModel> Items { get; } = new();
     public ObservableCollection<HistoryItemViewModel> HistoryEntries { get; } = new();
-    public ObservableCollection<string> RecentUrls { get; } = new();
     public ObservableCollection<AdapterSpeedChipViewModel> AdapterSpeedChips { get; } = new();
 
-    [ObservableProperty] private string urlInput = "";
     [ObservableProperty] private string? inputError;
     [ObservableProperty] private double tabSpeedBps;
     [ObservableProperty] private string tabSpeedText = "0 B/s";
     [ObservableProperty] private string itemSummaryText = "0 active";
     [ObservableProperty] private bool hasNoItems = true;
-    [ObservableProperty] private bool canGoBack;
-    [ObservableProperty] private bool canGoForward;
     [ObservableProperty] private bool isSpeedTesting;
     [ObservableProperty] private string speedTestText = "";
 
     partial void OnHasNoItemsChanged(bool value)
     {
-        OnPropertyChanged(nameof(ShowHome));
+        OnPropertyChanged(nameof(ShowEmptyListHint));
         OnPropertyChanged(nameof(ShowHistoryEmpty));
     }
 
     public bool IsDownloadTab => Kind != TabKind.History;
     public bool IsHistoryTab => Kind == TabKind.History;
     public bool IsCombined => Kind == TabKind.Combined;
-    public bool ShowHome => IsDownloadTab && HasNoItems;
+    public bool ShowEmptyListHint => IsDownloadTab && HasNoItems;
     public bool ShowHistoryEmpty => IsHistoryTab && HasNoItems;
-    public bool HasRecentUrls => RecentUrls.Count > 0;
     public string ScopeHint => Kind switch
     {
         TabKind.Combined => "Uses every active adapter — Ethernet + Wi-Fi together",
@@ -66,9 +62,6 @@ public partial class DownloadTabViewModel : ObservableObject
     public event Action<string, string>? Diagnostic;
 
     private readonly DispatcherTimer _sampleTimer;
-    private readonly List<string> _backStack = new();
-    private readonly List<string> _forwardStack = new();
-    private const int MaxHistoryDepth = 50;
 
     public DownloadTabViewModel(TabKind kind, NetworkAdapterInfo? adapter = null)
     {
@@ -85,6 +78,11 @@ public partial class DownloadTabViewModel : ObservableObject
             _ => ("🕘", "History", new SolidColorBrush(Color.Parse("#9CA3AF")), "History")
         };
 
+        Browser = new BrowserViewModel(
+            ResolveTabBinds,
+            url => AddDownload(url, out _),
+            AppServices.BrowserData);
+
         if (kind == TabKind.History)
         {
             ReloadHistory();
@@ -96,6 +94,12 @@ public partial class DownloadTabViewModel : ObservableObject
         LoadAdapterChips();
         _sampleTimer = MakeTimer(true);
     }
+
+    /// <summary>Adapter IPs this tab's browser + downloads are bound to.</summary>
+    private IReadOnlyList<System.Net.IPAddress> ResolveTabBinds() =>
+        Kind == TabKind.Combined
+            ? AppServices.AllAdapterIPs()
+            : AppServices.ResolveBindsForTab(ScopeLabel, new[] { ScopeLabel });
 
     private void LoadAdapterChips()
     {
@@ -119,7 +123,11 @@ public partial class DownloadTabViewModel : ObservableObject
 
     // ---- browser-style address bar -----------------------------------------------------------
 
-    [RelayCommand]
+    /// <summary>
+    /// The tab's navigation entry point (address bar, clipboard, local API, command line).
+    /// A single token goes through the browser: pages render, files auto-download.
+    /// Multiple tokens are treated as a bulk link list and downloaded directly.
+    /// </summary>
     public void Navigate(string? input)
     {
         InputError = null;
@@ -131,85 +139,44 @@ public partial class DownloadTabViewModel : ObservableObject
             return;
         }
 
-        // Single-line input may still hold several links separated by spaces or ';'.
         var urls = tokens
             .SelectMany(t => t.Split(new[] { ' ', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Select(t => (raw: t, url: UrlNormalizer.Normalize(t)))
+            .Where(t => t.Length > 0)
             .ToList();
 
-        if (urls.Any(u => u.url is null))
+        if (urls.Count == 0)
         {
-            InputError = $"'{TrimUrl(urls.First(u => u.url is null).raw)}' is not a valid http(s) link";
+            InputError = "Type or paste a link first, e.g. https://server.com/file.zip";
             return;
         }
 
-        var normalized = string.Join("  ", urls.Select(u => u.url!));
-        PushBackIfAddress();
-        _forwardStack.Clear();
-        UrlInput = normalized;
-        RefreshNav();
-        AddFromInput();
-    }
-
-    [RelayCommand]
-    private void GoBack()
-    {
-        if (_backStack.Count == 0) return;
-        if (!string.IsNullOrWhiteSpace(UrlInput))
-            _forwardStack.Add(UrlInput.Trim());
-        var url = _backStack[^1];
-        _backStack.RemoveAt(_backStack.Count - 1);
-        UrlInput = url;
-        RefreshNav();
-        AddFromInput();
-    }
-
-    [RelayCommand]
-    private void GoForward()
-    {
-        if (_forwardStack.Count == 0) return;
-        if (!string.IsNullOrWhiteSpace(UrlInput))
-            _backStack.Add(UrlInput.Trim());
-        var url = _forwardStack[^1];
-        _forwardStack.RemoveAt(_forwardStack.Count - 1);
-        UrlInput = url;
-        RefreshNav();
-        AddFromInput();
-    }
-
-    [RelayCommand]
-    private void Reload()
-    {
-        var current = (UrlInput ?? "").Trim();
-        if (current.Length > 0)
-            Navigate(current);
-    }
-
-    [RelayCommand]
-    private void GoHome()
-    {
-        PushBackIfAddress();
-        _forwardStack.Clear();
-        UrlInput = "";
-        RefreshNav();
-    }
-
-    private void PushBackIfAddress()
-    {
-        var current = (UrlInput ?? "").Trim();
-        if (current.Length == 0) return;
-        if (_backStack.Count > 0 && string.Equals(_backStack[^1], current, StringComparison.OrdinalIgnoreCase))
+        if (urls.Count == 1)
+        {
+            // Browser flow: page → render; file → download starts automatically.
+            _ = Browser.GoAsync(urls[0]);
             return;
-        _backStack.Add(current);
-        while (_backStack.Count > MaxHistoryDepth)
-            _backStack.RemoveAt(0);
+        }
+
+        // Bulk list: every token must be a valid URL, then queue them all.
+        var errors = new List<string>();
+        foreach (var raw in urls)
+        {
+            var url = UrlNormalizer.Normalize(raw);
+            if (url is null)
+            {
+                errors.Add($"'{TrimUrl(raw)}' is not a valid http(s) URL");
+                continue;
+            }
+            if (AddDownload(url, out var error) is null && error is not null)
+                errors.Add(error);
+        }
+        if (errors.Count > 0)
+            InputError = string.Join("  ·  ", errors.Distinct());
     }
 
-    private void RefreshNav()
-    {
-        CanGoBack = _backStack.Count > 0;
-        CanGoForward = _forwardStack.Count > 0;
-    }
+    /// <summary>⤓ Download button — queue everything in the address bar without browsing.</summary>
+    [RelayCommand]
+    private void DownloadFromAddress() => AddFromInput();
 
     // ---- downloads ---------------------------------------------------------------------------
 
@@ -217,7 +184,7 @@ public partial class DownloadTabViewModel : ObservableObject
     private void AddFromInput()
     {
         InputError = null;
-        var urls = (UrlInput ?? "")
+        var urls = (Browser.AddressText ?? "")
             .Split(new[] { '\r', '\n', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -279,7 +246,6 @@ public partial class DownloadTabViewModel : ObservableObject
         WireItem(item);
         Items.Insert(0, item);
         HasNoItems = Items.Count == 0;
-        RememberRecent(normalized);
         return item;
     }
 
@@ -290,7 +256,6 @@ public partial class DownloadTabViewModel : ObservableObject
         WireItem(item);
         Items.Insert(0, item);
         HasNoItems = Items.Count == 0;
-        RememberRecent(job.Url);
     }
 
     /// <summary>
@@ -302,7 +267,6 @@ public partial class DownloadTabViewModel : ObservableObject
         WireItem(item);
         Items.Insert(0, item);
         HasNoItems = Items.Count == 0;
-        RememberRecent(item.Url);
     }
 
     private void WireItem(DownloadItemViewModel item)
@@ -362,15 +326,6 @@ public partial class DownloadTabViewModel : ObservableObject
             item.ResumeCommand.Execute(null);
     }
 
-    private void RememberRecent(string url)
-    {
-        RecentUrls.Remove(url);
-        RecentUrls.Insert(0, url);
-        while (RecentUrls.Count > 6)
-            RecentUrls.RemoveAt(RecentUrls.Count - 1);
-        OnPropertyChanged(nameof(HasRecentUrls));
-    }
-
     [RelayCommand]
     private async Task PasteFromClipboard()
     {
@@ -380,7 +335,7 @@ public partial class DownloadTabViewModel : ObservableObject
             if (top?.Clipboard is null) return;
             var text = await top.Clipboard.GetTextAsync();
             if (!string.IsNullOrWhiteSpace(text))
-                UrlInput = text.Trim();
+                Browser.AddressText = text.Trim();
         }
         catch { }
     }
@@ -467,27 +422,32 @@ public partial class DownloadTabViewModel : ObservableObject
         RunSpeedTestCommand.NotifyCanExecuteChanged();
         try
         {
-            const long testBytes = 12_000_000;   // ~12 MB per adapter
             var results = new List<string>();
             foreach (var adapter in adapters)
             {
                 SpeedTestText = $"Testing {adapter.Name}…";
-                try
+                var result = await Task.Run(() => SpeedTestService.RunAsync(
+                    adapter.Name,
+                    System.Net.IPAddress.Parse(adapter.IPv4Address),
+                    AppServices.Settings.SpeedTestUrl,
+                    SpeedTestService.MaxBytes,
+                    CancellationToken.None,
+                    progress: bytes => Dispatcher.UIThread.Post(() =>
+                    {
+                        if (IsSpeedTesting)
+                            SpeedTestText = $"Testing {adapter.Name}… {Formatter.Bytes(bytes)}";
+                    }))).ConfigureAwait(true);
+
+                if (result.Success)
                 {
-                    var result = await Task.Run(() => SpeedTestService.RunAsync(
-                        adapter.Name,
-                        System.Net.IPAddress.Parse(adapter.IPv4Address),
-                        AppServices.Settings.SpeedTestUrl,
-                        testBytes,
-                        CancellationToken.None));
-                    results.Add($"{adapter.Name}: {result.MegabitsPerSecond:0.#} Mbps");
+                    results.Add($"{result.AdapterName}: {result.MegabitsPerSecond:0.#} Mbps");
                     SentrySetup.TrackSpeedTest(adapter.Name, result.MegabitsPerSecond, true);
                 }
-                catch (Exception ex)
+                else
                 {
-                    results.Add($"{adapter.Name}: failed");
+                    results.Add($"{result.AdapterName}: {result.Error}");
                     SentrySetup.TrackSpeedTest(adapter.Name, 0, false);
-                    SentrySetup.CaptureMessage($"Speed test failed on {adapter.Name}: {ex.Message}", "speedtest");
+                    SentrySetup.CaptureMessage($"Speed test failed on {adapter.Name}: {result.Error}", "speedtest");
                 }
             }
             SpeedTestText = string.Join("   ·   ", results);

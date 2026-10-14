@@ -34,16 +34,22 @@ public partial class DownloadTabView : UserControl
         }
     }
 
+    private void OnAddressTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_vm is not null && sender is AutoCompleteBox box)
+            _vm.Browser.UpdateSuggestions(box.Text);
+    }
+
     private void OnAddressKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key is Key.Enter or Key.Return && _vm is not null)
+        if (e.Key is Key.Enter or Key.Return && _vm is not null && !e.Handled)
         {
-            _vm.NavigateCommand.Execute(_vm.UrlInput);
+            _vm.Browser.GoCommand.Execute(_vm.Browser.AddressText);
             e.Handled = true;
         }
     }
 
-    private TextBox? FindAddressBox() => this.FindControl<TextBox>("AddressBox");
+    private AutoCompleteBox? FindAddressBox() => this.FindControl<AutoCompleteBox>("AddressBox");
 
     private void OnSpeedSampled(double bytesPerSecond)
     {

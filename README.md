@@ -27,10 +27,21 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
   each segment through the cable *and* the radio at the same time.
 - **Automatic file splitting** — 8 segments below 500 MB, 16 above, never smaller than 2 MB
   each, interleaved across adapters (segment *i* → adapter *i % n*).
-- **Browser-style tabs** — each network tab has a real address bar with **Back / Forward /
-  Reload / Home** navigation history (like a web browser — navigating to a link starts the
-  download), a home start page with your recent links, `Ctrl+L` to focus the address bar and
-  smart URL normalization (`example.com/file.zip` → `https://example.com/file.zip`).
+- **Full embedded browser in every tab** — every network tab (Combined, Ethernet, Wi-Fi)
+  contains a real browser pane fetched **through that tab's own adapters**: address bar with
+  search fallback (DuckDuckGo Lite / Bing / Google), Back ◀ / Forward ▶ / Reload ↻ / Stop ✕ /
+  Home ⌂, **reader-view page rendering** (headings, paragraphs, lists, quotes, code, images,
+  tables), a **Links panel** listing every link on the page with a `Files only` filter and
+  one-click **⤓ download through the tab's network**, automatic **file detection** (navigating
+  to a file starts the segmented download immediately), **bookmarks** (🔖 / ☆), **browser
+  history** (🕘), address-bar **suggestions**, `Ctrl+L`, and **↗ open in system browser** as a
+  fallback for JavaScript-heavy sites.
+- **Adaptive segment scaling (max combined speed)** — while a download runs, the engine keeps
+  evaluating throughput: if extra connections buy more bandwidth it **splits the largest
+  remaining segments and opens new connections** (up to 32), and when one adapter finishes its
+  share it **steals work from the busy adapter** so the fast NIC never idles. This is what
+  lets Combined downloads actually saturate Ethernet + Wi-Fi even when the server caps
+  throughput per connection (IDM-style dynamic file segmentation).
 - **Clipboard link watcher** — copy a link anywhere and a one-click **⤓ Download** banner
   appears in the status bar (toggle 📋 in the toolbar).
 - **Bulk actions** — ⏸ pause all, ▶ resume all, ↻ retry failed, 🧹 clear finished — per tab.
@@ -52,6 +63,8 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
   chip + tab (greyed out while that IP is not present on the PC; never receives download
   binds while offline).
 - **Dark + Light theme** — follows the system theme by default, switchable in the toolbar.
+  All secondary text colors come from the app's own contrast-guaranteed palettes — nothing
+  hides on either background.
 - **Pause / Resume** — segment progress is persisted to disk; you can pause, close the app,
   reboot, and resume where you left off (guarded by ETag / Last-Modified revalidation).
 - **Auto-retry** — failed segments are retried up to 5 times with exponential backoff,
@@ -62,8 +75,9 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
 - **Live speed graph** — per-tab sparkline plus total throughput in the status bar.
 - **History** — completed/failed downloads recorded locally (JSON), with a History tab.
 - **Single-stream fallback** — servers without HTTP Range support are downloaded normally.
-- **Per-adapter speed test** — one-click throughput test per network (custom endpoint
-  configurable in settings).
+- **Per-adapter speed test** — one-click throughput test per network, bounded by a payload
+  cap and an 8-second window with live MB progress, friendly error messages (DNS, blocked,
+  refused — never a silent "failed"), and a custom endpoint option in settings.
 - **IDM-style scheduler** — restrict downloading to a daily time window (e.g. overnight),
   with automatic pause/resume at the window edges.
 - **Category folders** — optionally sort finished files into `Video/`, `Audio/`,
@@ -78,7 +92,7 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
 
 ## Install
 
-Download **`DualNetDownloader-1.2.0-win-x64.exe`** from the
+Download **`DualNetDownloader-1.3.0-win-x64.exe`** from the
 [Releases page](https://github.com/mythos0/DualNet-Downloader/releases) and run it —
 no .NET runtime or installer required.
 
@@ -89,9 +103,13 @@ no .NET runtime or installer required.
    - **🔌 <Ethernet name>** — downloads use only the Ethernet cable.
    - **📶 <Wi-Fi name>** — downloads use only the Wi-Fi adapter.
    - **🕘 History** — past downloads.
-2. Type or paste a link into the **address bar** (Enter or **⤓ Download**) — it works just
-   like a browser: Back ◀ / Forward ▶ / Reload ↻ / Home ⌂ navigate through the links you
-   visited. Multiple links (one per line) become multiple downloads.
+2. **Browse or download from the address bar** — Enter opens the page in the tab's reader
+   view (Back ◀ / Forward ▶ / Reload ↻ / Stop ✕ / Home ⌂ navigate like a real browser); when
+   you land on a file, the segmented download starts automatically over that tab's network.
+   **⤓ Download** queues the links directly without browsing. Non-URL input searches via
+   DuckDuckGo Lite / Bing / Google (choose in settings). Multiple links (one per line) become
+   multiple downloads. The **Links panel** on the right lists every link of the open page —
+   switch it to `Files only` and grab what you need with one click.
 3. Watch progress, pause/resume anytime, then open the file ⤢, reveal it 📁, verify its
    SHA-256 #, or download it again ↻.
 
@@ -111,7 +129,12 @@ auto shutdown).
    adapter *i % adapterCount*. Every segment streams directly into its final offset of a
    pre-allocated file — the "merge" is implicit and the finished file is byte-identical to
    the original.
-4. If the server doesn't support ranges, DualNet transparently falls back to one
+4. **Dynamic scaling**: a background loop watches throughput every 2 s — if more connections
+   still buy bandwidth, the largest remaining segments are split in half and fresh connections
+   open on the least-busy adapter; if an adapter runs out of work entirely, it steals half of
+   a busy segment from the other adapter. When extra connections stop helping (server cap
+   reached), scaling stops. Pause/resume persists the split segment list.
+5. If the server doesn't support ranges, DualNet transparently falls back to one
    conventional stream.
 
 > **Note:** aggregated throughput depends on the server/CDN allowing many parallel range
@@ -140,12 +163,13 @@ dotnet publish src/DualNet.App -c Release -r win-x64 --self-contained true \
 DualNet-Downloader/
 ├── src/
 │   ├── DualNet.Core/           # engine — no UI dependencies
-│   │   ├── Engine/             #   DownloadJob, DownloadManager, SegmentPlanner, FileNameGuesser
+│   │   ├── Engine/             #   DownloadJob, DownloadManager, SegmentPlanner, AdaptiveScalePolicy
+│   │   │   └── Browser/        #   BrowserService, HtmlDocumentParser (reader view), LinkClassifier
 │   │   ├── Net/                #   HttpConnectionFactory (per-adapter socket binding), adapter detection
 │   │   ├── Storage/            #   JSON settings + history
 │   │   └── Models/             #   shared models
 │   └── DualNet.App/            # Avalonia 11 UI (MVVM, CommunityToolkit)
-│       ├── Views/              #   MainWindow, DownloadTabView, SettingsWindow
+│       ├── Views/              #   MainWindow, DownloadTabView, BrowserPane, SettingsWindow
 │       ├── ViewModels/         #   MainViewModel, DownloadTabViewModel, DownloadItemViewModel…
 │       ├── Controls/           #   SpeedGraph sparkline
 │       └── SentrySetup.cs      # Sentry logs/metrics/crash reporting
@@ -154,10 +178,14 @@ DualNet-Downloader/
 
 ## Testing
 
-The test suite (46 tests) includes a purpose-built HTTP server with real byte-range support
-and covers: segment planning, URL normalization, the global speed limiter, browser-style
-address-bar navigation, file-name resolution, **dual-source-IP downloads verified by
-SHA-256**, no-range fallback, pause → close → restore → resume, remote-file-changed
+The test suite (136 tests) includes a purpose-built HTTP server with real byte-range and
+per-source-IP throttling, and covers: segment planning, **adaptive scale policy + end-to-end
+work-stealing/splitting downloads verified by SHA-256**, the full browser pipeline (HTML
+parsing, link classification, file detection, bookmarks/history stores, headless browser
+view-model navigation), the speed-test service (success, refused endpoint, payload cap), the
+global speed limiter, URL normalization, **Sentry integration with a recording transport**
+(events, exceptions, structured logs, metrics), file-name resolution, **dual-source-IP
+downloads**, no-range fallback, pause → close → restore → resume, remote-file-changed
 revalidation, automatic retry on 503s, the concurrency queue, and headless UI smoke tests.
 
 ## Privacy

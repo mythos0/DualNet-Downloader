@@ -1,0 +1,194 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DualNet.App.ViewModels"
+             xmlns:views="using:DualNet.App.Views"
+             xmlns:core="using:DualNet.Core.Engine.Browser"
+             x:Class="DualNet.App.Views.BrowserPane"
+             x:DataType="vm:BrowserViewModel"
+             x:CompileBindings="True">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- Loading progress -->
+    <ProgressBar Grid.Row="0" Height="3" MinHeight="3" CornerRadius="2"
+                 IsIndeterminate="{Binding IsLoading}"
+                 IsVisible="{Binding IsLoading}" Margin="0,2,0,4" />
+
+    <Panel Grid.Row="1">
+
+      <!-- ============ Home / start page ============ -->
+      <StackPanel IsVisible="{Binding ShowHome}" HorizontalAlignment="Center"
+                  Margin="0,44,0,0" Spacing="8" MaxWidth="620">
+        <Border Classes="homeLogo" HorizontalAlignment="Center" Margin="0,0,0,8">
+          <TextBlock Text="⇊" />
+        </Border>
+        <TextBlock Text="DualNet Downloader" FontSize="23" FontWeight="Bold" TextAlignment="Center" />
+        <TextBlock Classes="hint" TextAlignment="Center" TextWrapping="Wrap"
+                   Text="Type a link or a search in the address bar above and press Enter. Pages open in this reader view over the tab's own network; when you land on a file, it is split into segments and downloaded over Ethernet + Wi-Fi simultaneously." />
+        <TextBlock Classes="hint" TextAlignment="Center" Margin="0,10,0,2"
+                   IsVisible="{Binding HasRecentUrls}"
+                   Text="Recent pages and files — click to reopen:" />
+        <ItemsControl ItemsSource="{Binding RecentUrls}" IsVisible="{Binding HasRecentUrls}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel HorizontalAlignment="Center" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <Button Classes="pill" Content="{Binding}" Margin="3" MaxWidth="280"
+                      Command="{Binding $parent[views:BrowserPane].DataContext.GoCommand}"
+                      CommandParameter="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <!-- ============ Error page ============ -->
+      <StackPanel IsVisible="{Binding HasPageError}" HorizontalAlignment="Center"
+                  Margin="0,60,0,0" Spacing="10" MaxWidth="560">
+        <TextBlock Text="⚠" FontSize="42" HorizontalAlignment="Center"
+                   Foreground="{DynamicResource DnWarnBrush}" />
+        <TextBlock Text="Cannot open this page" FontSize="17" FontWeight="Bold" TextAlignment="Center" />
+        <TextBlock Text="{Binding PageError}" Classes="hint" TextAlignment="Center" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,8,0,0">
+          <Button Classes="accent" Content="↻ Retry"
+                  Command="{Binding GoCommand}" CommandParameter="{Binding AddressText}" />
+          <Button Classes="toolbtn" Content="↗ Open in system browser"
+                  Command="{Binding OpenExternalCommand}" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- ============ Rendered page + links panel ============ -->
+      <Grid IsVisible="{Binding HasPage}" ColumnDefinitions="*,Auto,310">
+
+        <ScrollViewer Grid.Column="0">
+          <StackPanel MaxWidth="760" Margin="18,10,18,20">
+            <TextBlock Text="{Binding PageTitle}" FontSize="19" FontWeight="Bold"
+                       TextWrapping="Wrap" Margin="0,2,0,12" />
+            <ItemsControl ItemsSource="{Binding Blocks}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:PageBlockViewModel">
+                  <StackPanel Margin="0,0,0,10">
+
+                    <!-- Heading -->
+                    <TextBlock IsVisible="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=heading}"
+                               Text="{Binding Text}" FontSize="{Binding HeadingFontSize}"
+                               FontWeight="Bold" TextWrapping="Wrap" />
+
+                    <!-- Paragraph (+ its links as chips) -->
+                    <StackPanel IsVisible="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=para}">
+                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13.5"
+                                 IsVisible="{Binding Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <ItemsControl ItemsSource="{Binding Links}" IsVisible="{Binding HasLinks}" Margin="0,5,0,0">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="core:BrowserLink">
+                            <Button Classes="pill linkchip" Margin="0,2,6,2" MaxWidth="330"
+                                    Command="{Binding $parent[views:BrowserPane].DataContext.OpenLinkCommand}"
+                                    CommandParameter="{Binding}">
+                              <StackPanel Orientation="Horizontal" Spacing="5">
+                                <TextBlock Text="📄" FontSize="11" IsVisible="{Binding !IsFile}" />
+                                <TextBlock Text="⤓" FontSize="11" IsVisible="{Binding IsFile}" />
+                                <TextBlock Text="{Binding DisplayText}" TextTrimming="CharacterEllipsis" />
+                              </StackPanel>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Bullet / quote / pre -->
+                    <TextBlock IsVisible="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=bullet}"
+                               Text="{Binding Text}" TextWrapping="Wrap" FontSize="13.5" />
+                    <Border IsVisible="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=quote}"
+                            Classes="card" Padding="12,8" Background="{DynamicResource DnTabBrush}">
+                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" FontStyle="Italic" />
+                    </Border>
+                    <Border IsVisible="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=pre}"
+                            Classes="card" Padding="12,8" Background="{DynamicResource DnFieldBrush}">
+                      <TextBlock Text="{Binding Text}" FontFamily="Consolas, DejaVu Sans Mono, monospace"
+                                 FontSize="12" TextWrapping="Wrap" />
+                    </Border>
+
+                    <!-- Image -->
+                    <StackPanel IsVisible="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=image}">
+                      <Image Source="{Binding ImageSource}" IsVisible="{Binding HasImage}"
+                             MaxHeight="330" HorizontalAlignment="Left" />
+                      <Button Classes="pill" IsVisible="{Binding !HasImage}" Margin="0,2,0,2"
+                              Content="🖼  Open image"
+                              Command="{Binding $parent[views:BrowserPane].DataContext.OpenLinkCommand}"
+                              CommandParameter="{Binding ImageUrl}" />
+                    </StackPanel>
+
+                    <Separator IsVisible="{Binding Kind, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=divider}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+
+        <GridSplitter Grid.Column="1" Width="6" IsVisible="{Binding ShowLinksPanel}"
+                      Background="Transparent" HorizontalAlignment="Center" />
+
+        <!-- Links / files panel -->
+        <Border Grid.Column="2" Classes="card" Padding="0" Margin="6,0,0,0"
+                IsVisible="{Binding ShowLinksPanel}">
+          <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="12,10,12,10">
+
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+              <TextBlock FontWeight="Bold" FontSize="13" VerticalAlignment="Center">
+                <TextBlock.Text>
+                  <MultiBinding StringFormat="Links ({0}) · files ({1})">
+                    <Binding Path="TotalLinkCount" />
+                    <Binding Path="FileLinkCount" />
+                  </MultiBinding>
+                </TextBlock.Text>
+              </TextBlock>
+              <ComboBox Grid.Column="1" SelectedIndex="{Binding LinkFilterIndex}" MinWidth="108" FontSize="12">
+                <ComboBoxItem Content="All links" />
+                <ComboBoxItem Content="Files only" />
+              </ComboBox>
+            </Grid>
+
+            <TextBox Grid.Row="1" Text="{Binding LinkSearchText}" Watermark="Filter links…"
+                     FontSize="12" Margin="0,0,0,6" />
+
+            <TextBlock Grid.Row="2" Classes="hint" Margin="0,0,0,4"
+                       Text="⤓ downloads through this tab's network · row opens the page" />
+
+            <ListBox Grid.Row="3" ItemsSource="{Binding FilteredLinks}" Background="Transparent"
+                     BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="core:BrowserLink">
+                  <Grid ColumnDefinitions="*,Auto" Margin="2,3">
+                    <Button Classes="linkrow" HorizontalContentAlignment="Stretch"
+                            HorizontalAlignment="Stretch"
+                            Command="{Binding $parent[views:BrowserPane].DataContext.OpenLinkCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="{Binding Url}">
+                      <StackPanel Orientation="Vertical" Spacing="1">
+                        <TextBlock Text="{Binding DisplayText}" FontSize="12" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Host}" Classes="hint" FontSize="10.5"
+                                   TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1" Classes="toolbtn" Content="⤓" Margin="6,0,0,0"
+                            IsVisible="{Binding IsFile}"
+                            Command="{Binding $parent[views:BrowserPane].DataContext.DownloadLinkCommand}"
+                            CommandParameter="{Binding}"
+                            ToolTip.Tip="Download this file over this tab's network" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Grid>
+        </Border>
+      </Grid>
+    </Panel>
+  </Grid>
+</UserControl>

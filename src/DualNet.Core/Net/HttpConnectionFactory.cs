@@ -10,7 +10,7 @@ namespace DualNet.Core.Net;
 /// </summary>
 public static class HttpConnectionFactory
 {
-    public const string UserAgent = "DualNetDownloader/1.1 (+dual-network segment downloader)";
+    public const string UserAgent = "DualNetDownloader/1.3 (+dual-network segment downloader)";
 
     private static volatile IWebProxy? _proxyOverride;
 
@@ -48,6 +48,9 @@ public static class HttpConnectionFactory
             UseProxy = _proxyOverride is not null,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             ConnectTimeout = TimeSpan.FromSeconds(20),
+            // Segment workers pull from the per-adapter pool in parallel; make the
+            // headroom explicit (default is int.MaxValue but be defensive across runtimes).
+            MaxConnectionsPerServer = 64,
             ConnectCallback = async (context, cancellationToken) =>
             {
                 var host = context.DnsEndPoint.Host;

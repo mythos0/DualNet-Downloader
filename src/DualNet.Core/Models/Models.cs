@@ -23,6 +23,13 @@ public sealed class SegmentState
     public long End { get; set; }          // inclusive; -1 = open ended
     public long Written { get; set; }      // bytes already written to disk
 
+    /// <summary>
+    /// Adapter slot this segment is assigned to (index into BindAddresses).
+    /// Null on older plans — the worker falls back to interleaved assignment.
+    /// Dynamic splits always set it so the new connection carries the intended NIC.
+    /// </summary>
+    public int? Slot { get; set; }
+
     public long Length => End < 0 ? -1 : End - Start + 1;
     public long Remaining => End < 0 ? -1 : Math.Max(0, End - Start + 1 - Written);
     public bool IsComplete => End >= 0 && Written >= End - Start + 1;
@@ -54,6 +61,18 @@ public sealed class DownloadOptions
 
     /// <summary>Upper cap for auto-planned segments.</summary>
     public int MaxSegmentsCap { get; set; } = 32;
+
+    /// <summary>
+    /// Dynamic segment scaling (IDM-style): monitors throughput and keeps adding
+    /// connections (splitting the largest remaining segments) while the combined
+    /// speed keeps improving, and hands work to adapters that run out of segments.
+    /// This is what lets Combined downloads actually saturate Ethernet + Wi-Fi
+    /// even when the server caps throughput per connection.
+    /// </summary>
+    public bool AdaptiveScaling { get; set; } = true;
+
+    /// <summary>How often the adaptive scaler evaluates throughput (milliseconds).</summary>
+    public int ScaleIntervalMs { get; set; } = 2_000;
 
     public static DownloadOptions Default => new();
 }

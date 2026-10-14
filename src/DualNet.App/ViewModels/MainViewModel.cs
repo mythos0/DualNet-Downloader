@@ -293,19 +293,31 @@ public partial class MainViewModel : ObservableObject
         ClipboardBannerText = null;
     }
 
-    /// <summary>External entry point (drag &amp; drop, .txt files): every line becomes a download.</summary>
+    /// <summary>External entry point (drag & drop, .txt files): a single link is browsed,
+    /// a multi-link list is queued for download directly.</summary>
     public void AddUrlsFromText(string text)
     {
         var urls = (text ?? "")
             .Split(new[] { '\r', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(t => UrlNormalizer.Normalize(t))
             .Where(n => n is not null && n.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (urls.Count == 0) return;
 
         var tab = SelectedTab is { IsDownloadTab: true } t ? t : Tabs.FirstOrDefault(x => x.IsDownloadTab);
-        foreach (var url in urls)
-            tab?.Navigate(url);
+        if (tab is null) return;
+
+        if (urls.Count == 1)
+        {
+            tab.Navigate(urls[0]);   // browse — file links start downloading automatically
+        }
+        else
+        {
+            foreach (var url in urls)
+                tab.AddDownload(url, out _);
+        }
     }
 
     // ---- auto shutdown ---------------------------------------------------------------------------

@@ -20,6 +20,11 @@
           <SolidColorBrush x:Key="DnOkBrush" Color="#34D399" />
           <SolidColorBrush x:Key="DnWarnBrush" Color="#FBBF24" />
           <SolidColorBrush x:Key="DnDangerBrush" Color="#F87171" />
+          <!-- Explicit text brushes: guaranteed readable on the dark palette
+               (never depend on control-theme resource resolution for text). -->
+          <SolidColorBrush x:Key="DnTextPrimaryBrush" Color="#EAF0FB" />
+          <SolidColorBrush x:Key="DnTextSecondaryBrush" Color="#B9C4DA" />
+          <SolidColorBrush x:Key="DnTextTertiaryBrush" Color="#93A1BC" />
         </ResourceDictionary>
 
         <!-- ============ Light palette ============ -->
@@ -35,6 +40,9 @@
           <SolidColorBrush x:Key="DnOkBrush" Color="#059669" />
           <SolidColorBrush x:Key="DnWarnBrush" Color="#B45309" />
           <SolidColorBrush x:Key="DnDangerBrush" Color="#DC2626" />
+          <SolidColorBrush x:Key="DnTextPrimaryBrush" Color="#17202F" />
+          <SolidColorBrush x:Key="DnTextSecondaryBrush" Color="#45526B" />
+          <SolidColorBrush x:Key="DnTextTertiaryBrush" Color="#5F6E8C" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
 
@@ -135,12 +143,14 @@
     </Style>
 
     <!-- ================= Typography ================= -->
+    <!-- Dim/secondary text uses the app's own theme dictionaries (DnText*) with guaranteed
+         contrast on both palettes — no dependence on control-theme resource resolution. -->
     <Style Selector="TextBlock.dim">
-      <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DnTextSecondaryBrush}" />
       <Setter Property="FontSize" Value="12" />
     </Style>
     <Style Selector="TextBlock.hint">
-      <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DnTextTertiaryBrush}" />
       <Setter Property="FontSize" Value="11.5" />
     </Style>
     <Style Selector="TextBlock.error">
@@ -155,12 +165,12 @@
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="Margin" Value="0,14,0,6" />
-      <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DnTextPrimaryBrush}" />
     </Style>
     <Style Selector="TextBlock.empty">
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,48,0,0" />
-      <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource DnTextTertiaryBrush}" />
       <Setter Property="FontSize" Value="13.5" />
     </Style>
 
@@ -208,6 +218,26 @@
       <Setter Property="Padding" Value="13,6" />
       <Setter Property="CornerRadius" Value="15" />
       <Setter Property="FontSize" Value="11.5" />
+    </Style>
+
+    <!-- Browser: full-width list rows (bookmarks, history, links panel) -->
+    <Style Selector="Button.linkrow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.linkrow:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DnCardHoverBrush}" />
+    </Style>
+
+    <!-- Browser: inline link chips inside rendered pages -->
+    <Style Selector="Button.linkchip">
+      <Setter Property="Background" Value="{DynamicResource DnTabBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
     </Style>
 
     <!-- ================= Address bar ================= -->

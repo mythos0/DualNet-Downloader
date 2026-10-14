@@ -18,6 +18,7 @@ public static class AppServices
     public static AppSettings Settings { get; private set; } = new();
     public static HistoryService History { get; private set; } = null!;
     public static DownloadManager Manager { get; private set; } = null!;
+    public static BrowserStore BrowserData { get; private set; } = null!;
     public static LocalApiService? LocalApi { get; private set; }
     public static IReadOnlyList<NetworkAdapterInfo> Adapters { get; private set; } = Array.Empty<NetworkAdapterInfo>();
     public static Window? MainWindow { get; set; }
@@ -72,6 +73,7 @@ public static class AppServices
 
         History = new HistoryService(AppDataDir);
         Manager = new DownloadManager(() => Settings);
+        BrowserData = new BrowserStore(AppDataDir);
 
         RefreshAdapters();
         ApplyTheme(Settings.ThemeMode);

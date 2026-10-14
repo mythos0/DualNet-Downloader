@@ -1,45 +1,139 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:DualNet.App.ViewModels"
+             xmlns:views="using:DualNet.App.Views"
+             xmlns:storage="using:DualNet.Core.Storage"
              xmlns:controls="using:DualNet.App.Controls"
              x:Class="DualNet.App.Views.DownloadTabView"
              x:DataType="vm:DownloadTabViewModel"
              x:CompileBindings="True">
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,230">
 
-    <!-- ============ Browser-style address bar ============ -->
+    <!-- ============ Browser toolbar (download tabs) ============ -->
     <Border Grid.Row="0" Classes="urlbar" IsVisible="{Binding IsDownloadTab}">
-      <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+      <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
 
-        <Button Grid.Column="0" Classes="toolbtn nav" Content="◀" Command="{Binding GoBackCommand}"
-                IsEnabled="{Binding CanGoBack}" ToolTip.Tip="Back — previous link" />
-        <Button Grid.Column="1" Classes="toolbtn nav" Content="▶" Command="{Binding GoForwardCommand}"
-                IsEnabled="{Binding CanGoForward}" ToolTip.Tip="Forward — next link" Margin="4,0,0,0" />
-        <Button Grid.Column="2" Classes="toolbtn nav" Content="↻" Command="{Binding ReloadCommand}"
-                CommandParameter="{Binding UrlInput}" ToolTip.Tip="Reload — re-download this link" Margin="4,0,0,0" />
-        <Button Grid.Column="3" Classes="toolbtn nav" Content="⌂" Command="{Binding GoHomeCommand}"
-                ToolTip.Tip="Home — clear the address bar" Margin="4,0,8,0" />
+        <Button Grid.Column="0" Classes="toolbtn nav" Content="◀" Command="{Binding Browser.GoBackCommand}"
+                IsEnabled="{Binding Browser.CanGoBack}" ToolTip.Tip="Back" />
+        <Button Grid.Column="1" Classes="toolbtn nav" Content="▶" Command="{Binding Browser.GoForwardCommand}"
+                IsEnabled="{Binding Browser.CanGoForward}" ToolTip.Tip="Forward" Margin="4,0,0,0" />
+        <Button Grid.Column="2" Classes="toolbtn nav" Content="↻" Command="{Binding Browser.ReloadCommand}"
+                ToolTip.Tip="Reload the page" Margin="4,0,0,0" />
+        <Button Grid.Column="3" Classes="toolbtn nav" Content="✕" Command="{Binding Browser.StopCommand}"
+                IsVisible="{Binding Browser.IsLoading}" ToolTip.Tip="Stop loading" Margin="4,0,0,0" />
+        <Button Grid.Column="4" Classes="toolbtn nav" Content="⌂" Command="{Binding Browser.GoHomeCommand}"
+                ToolTip.Tip="Home" Margin="4,0,8,0" />
 
-        <TextBox x:Name="AddressBox" Grid.Column="4" Classes="address"
-                 Watermark="Enter a link — example.com/file.zip or https://…  (Enter ⇣, Ctrl+L)"
-                 Text="{Binding UrlInput}"
-                 KeyDown="OnAddressKeyDown" />
+        <AutoCompleteBox x:Name="AddressBox" Grid.Column="5" Classes="address"
+                         Watermark="Search or type a link — Enter opens it over this tab's network  (Ctrl+L)"
+                         Text="{Binding Browser.AddressText}"
+                         ItemsSource="{Binding Browser.Suggestions}"
+                         FilterMode="None"
+                         MinimumPrefixLength="2"
+                         MaxDropDownHeight="240"
+                         TextChanged="OnAddressTextChanged"
+                         KeyDown="OnAddressKeyDown" />
 
-        <Button Grid.Column="5" Classes="toolbtn" Content="📋" Command="{Binding PasteFromClipboardCommand}"
-                ToolTip.Tip="Paste from clipboard" Margin="8,0,0,0" />
-        <Button Grid.Column="6" Classes="accent" Content="⤓ Download" Command="{Binding NavigateCommand}"
-                CommandParameter="{Binding UrlInput}" ToolTip.Tip="Start downloading (Enter)" Margin="8,0,0,0" />
+        <Button Grid.Column="6" Classes="toolbtn" Content="★" Command="{Binding Browser.ToggleBookmarkCommand}"
+                IsVisible="{Binding Browser.IsBookmarked}"
+                ToolTip.Tip="Bookmarked — click to remove" Margin="8,0,0,0" />
+        <Button Grid.Column="7" Classes="toolbtn" Content="☆" Command="{Binding Browser.ToggleBookmarkCommand}"
+                IsVisible="{Binding !Browser.IsBookmarked}"
+                ToolTip.Tip="Bookmark this page" Margin="8,0,0,0" />
+
+        <Button Grid.Column="8" Classes="toolbtn" Content="🔖" Margin="6,0,0,0" ToolTip.Tip="Bookmarks">
+          <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedRight">
+              <Border Width="380">
+                <StackPanel>
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                    <TextBlock Text="Bookmarks" FontWeight="Bold" />
+                    <TextBlock Grid.Column="1" Classes="hint" Text="☆ adds the current page" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding Browser.BookmarkList}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="storage:BookmarkEntry">
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                          <Button Classes="linkrow" HorizontalContentAlignment="Stretch"
+                                  Command="{Binding $parent[views:DownloadTabView].DataContext.Browser.OpenBookmarkCommand}"
+                                  CommandParameter="{Binding}"
+                                  ToolTip.Tip="{Binding Url}">
+                            <StackPanel Orientation="Vertical">
+                              <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                                         TextTrimming="CharacterEllipsis" MaxWidth="300" />
+                              <TextBlock Text="{Binding Url}" Classes="hint" FontSize="10.5"
+                                         TextTrimming="CharacterEllipsis" MaxWidth="300" />
+                            </StackPanel>
+                          </Button>
+                          <Button Grid.Column="1" Classes="toolbtn" Content="✕" Padding="6,2" MinWidth="0"
+                                  Command="{Binding $parent[views:DownloadTabView].DataContext.Browser.RemoveBookmarkCommand}"
+                                  CommandParameter="{Binding}" ToolTip.Tip="Remove bookmark" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock Classes="hint" Text="No bookmarks yet — press ☆ on any page."
+                             IsVisible="{Binding !Browser.HasBookmarks}" />
+                </StackPanel>
+              </Border>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
+
+        <Button Grid.Column="9" Classes="toolbtn" Content="🕘" Margin="6,0,0,0" ToolTip.Tip="Browser history">
+          <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedRight">
+              <Border Width="400">
+                <StackPanel>
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                    <TextBlock Text="Pages visited" FontWeight="Bold" />
+                    <Button Grid.Column="1" Classes="toolbtn" Content="Clear" Padding="8,2" MinWidth="0"
+                            Command="{Binding Browser.ClearBrowserHistoryCommand}" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding Browser.VisitedList}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="storage:VisitedEntry">
+                        <Button Classes="linkrow" HorizontalContentAlignment="Stretch" Margin="0,2"
+                                Command="{Binding $parent[views:DownloadTabView].DataContext.Browser.OpenVisitedCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="{Binding Url}">
+                          <StackPanel Orientation="Vertical">
+                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                            <TextBlock Text="{Binding Url}" Classes="hint" FontSize="10.5"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                          </StackPanel>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock Classes="hint" Text="No browser history yet."
+                             IsVisible="{Binding !Browser.HasVisited}" />
+                </StackPanel>
+              </Border>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
+
+        <Button Grid.Column="10" Classes="toolbtn" Content="↗" Command="{Binding Browser.OpenExternalCommand}"
+                ToolTip.Tip="Open the current page in your system browser" Margin="6,0,0,0" />
+        <Button Grid.Column="11" Classes="accent" Content="⤓ Download" Command="{Binding DownloadFromAddressCommand}"
+                ToolTip.Tip="Skip browsing — queue the address bar links directly" Margin="8,0,0,0" />
 
         <!-- Scope + quick actions row -->
-        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="7" ColumnDefinitions="*,Auto" Margin="2,8,0,0">
+        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="12" ColumnDefinitions="*,Auto" Margin="2,8,0,0">
           <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
             <TextBlock Text="{Binding ScopeHint}" Classes="hint" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Browser.StatusText}" Classes="dim" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" MaxWidth="420" />
             <TextBlock Text="{Binding InputError}" Classes="error"
                        IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="460" />
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420" />
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button Classes="toolbtn mini" Content="📋" Command="{Binding PasteFromClipboardCommand}"
+                    ToolTip.Tip="Paste from clipboard into the address bar" />
             <Button Classes="toolbtn mini" Content="⏸ all" Command="{Binding PauseAllCommand}"
                     ToolTip.Tip="Pause every download in this tab" />
             <Button Classes="toolbtn mini" Content="▶ all" Command="{Binding ResumeAllCommand}"
@@ -63,166 +157,70 @@
       </Grid>
     </Border>
 
-    <!-- Content -->
-    <ScrollViewer Grid.Row="1">
-      <Panel>
+    <!-- Thin browser load progress -->
+    <ProgressBar Grid.Row="1" Height="3" MinHeight="3" CornerRadius="2" Margin="0,2,0,0"
+                 IsVisible="{Binding IsDownloadTab}"
+                 IsIndeterminate="{Binding Browser.IsLoading}" />
 
-        <!-- ============ Browser home / start page ============ -->
-        <StackPanel IsVisible="{Binding ShowHome}" HorizontalAlignment="Center"
-                    Margin="0,52,0,0" Spacing="8" MaxWidth="660">
-          <Border Classes="homeLogo" HorizontalAlignment="Center" Margin="0,0,0,8">
-            <TextBlock Text="⇊" />
-          </Border>
-          <TextBlock Text="DualNet Downloader" FontSize="23" FontWeight="Bold" TextAlignment="Center" />
-          <TextBlock Classes="hint" TextAlignment="Center" TextWrapping="Wrap"
-                     Text="Type a link in the address bar above — the file is split into segments and downloaded over your Ethernet and Wi-Fi adapters at the same time, then reassembled byte-for-byte." />
-          <TextBlock Classes="hint" TextAlignment="Center" Margin="0,10,0,2"
-                     IsVisible="{Binding HasRecentUrls}"
-                     Text="Recent links — click to download again:" />
+    <!-- ============ Main content ============ -->
+    <Panel Grid.Row="2">
 
-          <ItemsControl ItemsSource="{Binding RecentUrls}" IsVisible="{Binding HasRecentUrls}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <WrapPanel HorizontalAlignment="Center" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
+      <!-- History rows -->
+      <ScrollViewer IsVisible="{Binding IsHistoryTab}">
+        <StackPanel>
+          <TextBlock Classes="empty"
+                     Text="No history yet — finished downloads appear here."
+                     IsVisible="{Binding ShowHistoryEmpty}" />
+          <ItemsControl ItemsSource="{Binding HistoryEntries}" Margin="0,8,0,0">
             <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="x:String">
-                <Button Classes="pill" Content="{Binding}"
-                        Command="{Binding $parent[ItemsControl].DataContext.NavigateCommand}"
-                        CommandParameter="{Binding}"
-                        Margin="3" />
+              <DataTemplate x:DataType="vm:HistoryItemViewModel">
+                <Border Classes="card" Margin="0,0,0,9">
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Entry.Url}" />
+                    <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="12"
+                               FontWeight="SemiBold" Foreground="{Binding StatusBrush}"
+                               Margin="10,0,0,0" />
+                    <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Spacing="12"
+                                Margin="0,5,0,0">
+                      <TextBlock Text="{Binding SizeText}" Classes="hint" />
+                      <TextBlock Text="{Binding Scope}" Classes="hint" />
+                      <TextBlock Text="{Binding WhenText}" Classes="hint" />
+                      <TextBlock Text="{Binding Message}" Classes="error"
+                                 IsVisible="{Binding HasMessage}"
+                                 TextTrimming="CharacterEllipsis" MaxWidth="480" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </StackPanel>
+      </ScrollViewer>
 
-        <!-- History empty state -->
-        <TextBlock Classes="empty"
-                   Text="No history yet — finished downloads appear here."
-                   IsVisible="{Binding ShowHistoryEmpty}" />
-
-        <!-- Download cards -->
-        <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsDownloadTab}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:DownloadItemViewModel">
-              <Border Classes="card" Margin="0,0,0,9">
-                <Grid ColumnDefinitions="52,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
-
-                  <Border Grid.RowSpan="4" Width="42" Height="42" CornerRadius="13"
-                          Background="{DynamicResource DnAccentSoftBrush}" VerticalAlignment="Top">
-                    <TextBlock Text="{Binding CategoryGlyph}" FontSize="19"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               ToolTip.Tip="{Binding CategoryLabel}" />
-                  </Border>
-
-                  <Grid Grid.Column="1" Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
-                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip.Tip="{Binding Url}" />
-                    <TextBlock Grid.Column="2" Text="{Binding StatusText}" Classes="dim"
-                               Margin="10,0,0,0" VerticalAlignment="Center" />
-                  </Grid>
-
-                  <ProgressBar Grid.Column="1" Grid.Row="1"
-                               Value="{Binding ProgressPercent}" Maximum="100"
-                               IsIndeterminate="{Binding IsIndeterminate}"
-                               Height="7" Margin="0,8,0,0" />
-
-                  <Grid Grid.Column="1" Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto"
-                        Margin="0,7,0,0">
-                    <TextBlock Text="{Binding ProgressText}" Classes="hint" />
-                    <TextBlock Grid.Column="1" Text="{Binding EtaText}" Classes="hint"
-                               Margin="0,0,14,0" />
-                    <TextBlock Grid.Column="2" Text="{Binding SpeedText}" Classes="hint"
-                               FontWeight="SemiBold" Margin="0,0,14,0" />
-                    <TextBlock Grid.Column="3" Text="{Binding ErrorMessage}"
-                               Classes="error" IsVisible="{Binding HasError}"
-                               TextTrimming="CharacterEllipsis" MaxWidth="400" />
-                  </Grid>
-
-                  <TextBlock Grid.Column="1" Grid.Row="3" Classes="ok" Margin="0,5,0,0"
-                             Text="SHA-256 computed &amp; copied to clipboard ✓"
-                             IsVisible="{Binding HasHashText}" />
-
-                  <StackPanel Grid.Column="2" Grid.RowSpan="4" Orientation="Horizontal"
-                              Spacing="6" VerticalAlignment="Center" Margin="12,0,0,0">
-                    <Button Classes="toolbtn" Content="▲" IsVisible="{Binding CanMoveInQueue}"
-                            Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up in queue" />
-                    <Button Classes="toolbtn" Content="▼" IsVisible="{Binding CanMoveInQueue}"
-                            Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down in queue" />
-                    <Button Classes="toolbtn" Content="⏸" IsVisible="{Binding CanPause}"
-                            Command="{Binding PauseCommand}" ToolTip.Tip="Pause" />
-                    <Button Classes="toolbtn" Content="▶" IsVisible="{Binding CanResume}"
-                            Command="{Binding ResumeCommand}" ToolTip.Tip="Start / Resume" />
-                    <Button Classes="toolbtn" Content="✕" IsVisible="{Binding CanCancel}"
-                            Command="{Binding CancelCommand}" ToolTip.Tip="Cancel and delete partial file" />
-                    <Button Classes="toolbtn" Content="⤢" IsVisible="{Binding IsCompleted}"
-                            Command="{Binding OpenFileCommand}" ToolTip.Tip="Open file" />
-                    <Button Classes="toolbtn" Content="📁"
-                            Command="{Binding OpenFolderCommand}" ToolTip.Tip="Show in folder" />
-                    <Button Classes="toolbtn" Content="#" IsVisible="{Binding CanVerifyHash}"
-                            Command="{Binding VerifyHashCommand}"
-                            ToolTip.Tip="Verify integrity — compute SHA-256 and copy it" />
-                    <Button Classes="toolbtn" Content="🔗"
-                            Command="{Binding CopyUrlCommand}" ToolTip.Tip="Copy download URL" />
-                    <Button Classes="toolbtn" Content="↻" IsVisible="{Binding CanRestart}"
-                            Command="{Binding RestartCommand}" ToolTip.Tip="Download again from the start" />
-                    <Button Classes="toolbtn" Content="🗑" IsVisible="{Binding CanRemove}"
-                            Command="{Binding RemoveCommand}" ToolTip.Tip="Remove from list" />
-                  </StackPanel>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-
-        <!-- History rows -->
-        <ItemsControl ItemsSource="{Binding HistoryEntries}" IsVisible="{Binding IsHistoryTab}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:HistoryItemViewModel">
-              <Border Classes="card" Margin="0,0,0,9">
-                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
-                  <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
-                             TextTrimming="CharacterEllipsis"
-                             ToolTip.Tip="{Binding Entry.Url}" />
-                  <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="12"
-                             FontWeight="SemiBold" Foreground="{Binding StatusBrush}"
-                             Margin="10,0,0,0" />
-                  <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Spacing="12"
-                              Margin="0,5,0,0">
-                    <TextBlock Text="{Binding SizeText}" Classes="hint" />
-                    <TextBlock Text="{Binding Scope}" Classes="hint" />
-                    <TextBlock Text="{Binding WhenText}" Classes="hint" />
-                    <TextBlock Text="{Binding Message}" Classes="error"
-                               IsVisible="{Binding HasMessage}"
-                               TextTrimming="CharacterEllipsis" MaxWidth="480" />
-                  </StackPanel>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+      <!-- Embedded browser -->
+      <Panel IsVisible="{Binding IsDownloadTab}">
+        <views:BrowserPane DataContext="{Binding Browser}" />
       </Panel>
-    </ScrollViewer>
+    </Panel>
 
-    <!-- Per-tab speed graph + per-adapter live speeds + speed test -->
-    <Border Grid.Row="2" Classes="graphbar" IsVisible="{Binding IsDownloadTab}">
-      <Grid RowDefinitions="Auto" ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,14,0">
-          <TextBlock Text="{Binding TabSpeedText}" FontWeight="Bold" FontSize="15" />
-          <TextBlock Text="tab speed" Classes="hint" />
-        </StackPanel>
+    <!-- Row splitter between browser and downloads -->
+    <GridSplitter Grid.Row="3" Height="7" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                  IsVisible="{Binding IsDownloadTab}" Background="Transparent" />
 
-        <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="6">
-          <controls:SpeedGraph Height="46" x:Name="Graph" />
-          <TextBlock Text="{Binding SpeedTestText}" Classes="hint" TextWrapping="Wrap"
-                     IsVisible="{Binding SpeedTestText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        </StackPanel>
+    <!-- ============ Downloads section ============ -->
+    <Border Grid.Row="4" Classes="graphbar" IsVisible="{Binding IsDownloadTab}">
+      <Grid RowDefinitions="Auto,Auto,*" Margin="0,0,0,0">
 
-        <StackPanel Grid.Column="2" Orientation="Vertical" Spacing="7" VerticalAlignment="Center"
-                    Margin="14,0,0,0">
-          <ItemsControl ItemsSource="{Binding AdapterSpeedChips}">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="⤓ Downloads" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ItemSummaryText}" Classes="hint" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding TabSpeedText}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+          </StackPanel>
+          <ItemsControl Grid.Column="1" ItemsSource="{Binding AdapterSpeedChips}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <StackPanel Orientation="Horizontal" Spacing="6" />
@@ -233,19 +231,101 @@
                 <Border Classes="speedChip" ToolTip.Tip="{Binding IpAddress}">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding SpeedText}" FontSize="11" Classes="hint"
-                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding SpeedText}" FontSize="11" Classes="hint" VerticalAlignment="Center" />
                   </StackPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <Button Classes="toolbtn mini" HorizontalAlignment="Right"
-                  Content="⚡ test speed" Command="{Binding RunSpeedTestCommand}"
-                  ToolTip.Tip="Measure real bandwidth through this tab's adapter(s)" />
-        </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Button Classes="toolbtn mini" Content="⚡ test speed" Command="{Binding RunSpeedTestCommand}"
+                    ToolTip.Tip="Measure real bandwidth through this tab's adapter(s)" />
+            <Button Classes="toolbtn mini" Content="🗑" Command="{Binding ClearFinishedCommand}"
+                    ToolTip.Tip="Clear finished entries" />
+          </StackPanel>
+        </Grid>
+
+        <controls:SpeedGraph Grid.Row="1" Height="42" x:Name="Graph" Margin="0,0,0,6" />
+
+        <ScrollViewer Grid.Row="2">
+          <Panel>
+            <TextBlock Classes="hint" HorizontalAlignment="Center" Margin="0,10,0,0"
+                       IsVisible="{Binding ShowEmptyListHint}"
+                       Text="Nothing here yet — browse a page above, or type a link and press Enter. Files start downloading automatically over this tab's network." />
+            <ItemsControl ItemsSource="{Binding Items}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DownloadItemViewModel">
+                  <Border Classes="card" Margin="0,0,0,8" Padding="12,10">
+                    <Grid ColumnDefinitions="44,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+
+                      <Border Grid.RowSpan="4" Width="38" Height="38" CornerRadius="11"
+                              Background="{DynamicResource DnAccentSoftBrush}" VerticalAlignment="Top">
+                        <TextBlock Text="{Binding CategoryGlyph}" FontSize="17"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   ToolTip.Tip="{Binding CategoryLabel}" />
+                      </Border>
+
+                      <Grid Grid.Column="1" Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12.5"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Url}" />
+                        <TextBlock Grid.Column="2" Text="{Binding StatusText}" Classes="dim" FontSize="11.5"
+                                   Margin="10,0,0,0" VerticalAlignment="Center" />
+                      </Grid>
+
+                      <ProgressBar Grid.Column="1" Grid.Row="1"
+                                   Value="{Binding ProgressPercent}" Maximum="100"
+                                   IsIndeterminate="{Binding IsIndeterminate}"
+                                   Height="6" Margin="0,6,0,0" />
+
+                      <Grid Grid.Column="1" Grid.Row="2" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,5,0,0">
+                        <TextBlock Text="{Binding ProgressText}" Classes="hint" />
+                        <TextBlock Grid.Column="1" Text="{Binding EtaText}" Classes="hint" Margin="0,0,14,0" />
+                        <TextBlock Grid.Column="2" Text="{Binding SpeedText}" Classes="hint"
+                                   FontWeight="SemiBold" Margin="0,0,14,0" />
+                        <TextBlock Grid.Column="3" Text="{Binding ErrorMessage}"
+                                   Classes="error" IsVisible="{Binding HasError}"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="380" />
+                      </Grid>
+
+                      <TextBlock Grid.Column="1" Grid.Row="3" Classes="ok" Margin="0,4,0,0" FontSize="11"
+                                 Text="SHA-256 computed &amp; copied to clipboard ✓"
+                                 IsVisible="{Binding HasHashText}" />
+
+                      <StackPanel Grid.Column="2" Grid.RowSpan="4" Orientation="Horizontal"
+                                  Spacing="5" VerticalAlignment="Center" Margin="10,0,0,0">
+                        <Button Classes="toolbtn" Content="▲" IsVisible="{Binding CanMoveInQueue}"
+                                Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up in queue" />
+                        <Button Classes="toolbtn" Content="▼" IsVisible="{Binding CanMoveInQueue}"
+                                Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down in queue" />
+                        <Button Classes="toolbtn" Content="⏸" IsVisible="{Binding CanPause}"
+                                Command="{Binding PauseCommand}" ToolTip.Tip="Pause" />
+                        <Button Classes="toolbtn" Content="▶" IsVisible="{Binding CanResume}"
+                                Command="{Binding ResumeCommand}" ToolTip.Tip="Start / Resume" />
+                        <Button Classes="toolbtn" Content="✕" IsVisible="{Binding CanCancel}"
+                                Command="{Binding CancelCommand}" ToolTip.Tip="Cancel and delete partial file" />
+                        <Button Classes="toolbtn" Content="⤢" IsVisible="{Binding IsCompleted}"
+                                Command="{Binding OpenFileCommand}" ToolTip.Tip="Open file" />
+                        <Button Classes="toolbtn" Content="📁"
+                                Command="{Binding OpenFolderCommand}" ToolTip.Tip="Show in folder" />
+                        <Button Classes="toolbtn" Content="#" IsVisible="{Binding CanVerifyHash}"
+                                Command="{Binding VerifyHashCommand}"
+                                ToolTip.Tip="Verify integrity — compute SHA-256 and copy it" />
+                        <Button Classes="toolbtn" Content="🔗"
+                                Command="{Binding CopyUrlCommand}" ToolTip.Tip="Copy download URL" />
+                        <Button Classes="toolbtn" Content="↻" IsVisible="{Binding CanRestart}"
+                                Command="{Binding RestartCommand}" ToolTip.Tip="Download again from the start" />
+                        <Button Classes="toolbtn" Content="🗑" IsVisible="{Binding CanRemove}"
+                                Command="{Binding RemoveCommand}" ToolTip.Tip="Remove from list" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Panel>
+        </ScrollViewer>
       </Grid>
     </Border>
   </Grid>

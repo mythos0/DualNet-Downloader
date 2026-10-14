@@ -87,12 +87,13 @@ public partial class MainWindow : Window
         {
             if (DataContext is not MainViewModel vm) return;
 
-            // Dropped .txt files: every line is a link.
+            // Dropped .txt/.lst/.csv files: every line is a link.
             if (e.Data.Contains(DataFormats.FileNames) &&
-                e.Data.GetFileNames() is { } files)
+                e.Data.GetFiles() is { } fileItems)
             {
-                foreach (var file in files)
+                foreach (var item in fileItems)
                 {
+                    var file = item.Path.LocalPath;
                     if (File.Exists(file) &&
                         (file.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) ||
                          file.EndsWith(".lst", StringComparison.OrdinalIgnoreCase) ||

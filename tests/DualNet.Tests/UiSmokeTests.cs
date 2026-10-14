@@ -48,6 +48,14 @@ public class UiSmokeTests
         var window = CreateWindow();
         var vm = Assert.IsType<MainViewModel>(window.DataContext);
 
+        // Deterministic baseline regardless of the persisted settings file
+        // (the ctor loads the saved mode, so force 0 first).
+        AppServices.Settings.ThemeMode = 0;
+        if (vm.ThemeMode != 0)
+            vm.ThemeMode = 0;
+        AppServices.ApplyTheme(0);
+        Assert.Equal(ThemeVariant.Default, Avalonia.Application.Current!.RequestedThemeVariant);
+
         vm.ThemeMode = 1;
         Assert.Equal(ThemeVariant.Dark, Avalonia.Application.Current!.RequestedThemeVariant);
         vm.ThemeMode = 2;
@@ -144,9 +152,13 @@ public class UiSmokeTests
         Assert.Equal(DualNet.Core.Models.DownloadStatus.Queued, job.Status);
         Assert.True(item.CanMoveInQueue);
 
-        // Drag & drop text routing: valid URLs land in the current tab's navigation.
+        // Drag & drop text routing: a single link is browsed (address bar updates immediately).
         vm.AddUrlsFromText("  https://example.com/drag-drop-file.zip  \nnot-a-link");
-        Assert.Contains("drag-drop-file.zip", vm.Tabs[0].UrlInput, StringComparison.Ordinal);
-        Assert.NotNull(vm.Tabs[0].InputError is null || true);
+        Assert.Contains("drag-drop-file.zip", vm.Tabs[0].Browser.AddressText, StringComparison.Ordinal);
+
+        // Multi-link lists are queued directly as downloads.
+        int before = vm.Tabs[0].Items.Count;
+        vm.AddUrlsFromText("https://example.com/bulk-1.zip\nhttps://example.com/bulk-2.zip");
+        Assert.True(vm.Tabs[0].Items.Count >= before + 2, "bulk list should queue every link");
     }
 }

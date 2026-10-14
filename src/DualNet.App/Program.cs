@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media.Imaging;
+using DualNet.App.ViewModels;
 using Avalonia.Threading;
 
 namespace DualNet.App;
@@ -17,10 +18,10 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // Hidden CI helper: DualNetDownloader --screenshot /path/out.png
+        // Hidden CI helper: DualNetDownloader --screenshot /path/out.png [url-to-open]
         if (args.Length >= 2 && args[0] == "--screenshot")
         {
-            RunScreenshot(args[1]);
+            RunScreenshot(args[1], args.Length >= 3 ? args[2] : null);
             return;
         }
 
@@ -41,7 +42,22 @@ internal static class Program
             StartupRequests.PendingUrls.AddRange(urls);
         }
 
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception ex)
+        {
+            // Last-resort guard: startup/shutdown crashes reach Sentry even if the
+            // AppDomain hook never ran (or crashed first), then the error still propagates.
+            try
+            {
+                SentrySetup.CaptureException(ex, "program.fatal", isTerminating: true);
+                SentrySetup.FlushSync();
+            }
+            catch { }
+            throw;
+        }
     }
 
     private static List<string> ExtractUrls(string[] args)
@@ -64,7 +80,7 @@ internal static class Program
         return urls;
     }
 
-    private static void RunScreenshot(string path)
+    private static void RunScreenshot(string path, string? openUrl = null)
     {
         var lifetime = new ClassicDesktopStyleApplicationLifetime
         {
@@ -79,7 +95,17 @@ internal static class Program
             {
                 try
                 {
-                    await Task.Delay(1800);   // let the first frames settle
+                    if (!string.IsNullOrWhiteSpace(openUrl) &&
+                        lifetime.MainWindow?.DataContext is MainViewModel vm)
+                    {
+                        vm.Tabs[0].Navigate(openUrl);
+                        await Task.Delay(4500);   // let the page load + render
+                    }
+                    else
+                    {
+                        await Task.Delay(1800);   // let the first frames settle
+                    }
+
                     var win = lifetime.MainWindow;
                     if (win is not null)
                     {

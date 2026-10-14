@@ -25,6 +25,12 @@ public sealed class RangeTestServer : IDisposable
     public bool IgnoreRangeOnResume;               // 200 for range requests with start > 0
     public bool StallRequests;                     // accept connections but never respond
     public int FailFirstSegmentRequests;           // 503 the first N range requests with start > 0
+
+    /// <summary>Optional per-source-IP throttling: requests whose remote address starts with
+    /// this prefix are delayed by <see cref="SlowChunkDelayMs"/> per chunk (simulates one slow
+    /// NIC vs one fast NIC for adaptive work-stealing tests).</summary>
+    public string? SlowRemotePrefix;
+    public int SlowChunkDelayMs;
     private int _servedRequests;
     public IReadOnlyCollection<string> SeenRemoteAddresses => _seenRemoteAddresses.ToList();
     private readonly ConcurrentBag<string> _seenRemoteAddresses = new();
@@ -170,7 +176,7 @@ public sealed class RangeTestServer : IDisposable
                         response.ContentLength64 = count;
                         RequestLog.Enqueue($"#{_servedRequests} remote={ctx.Request.RemoteEndPoint} range={rangeHeader} -> 206 bytes={count}");
                         using var body = response.OutputStream;
-                        CopySlice(start, count, body, ct);
+                        CopySlice(start, count, body, ct, DelayForRemote(ctx));
                         return;
                     }
                 }
@@ -185,7 +191,7 @@ public sealed class RangeTestServer : IDisposable
 
             RequestLog.Enqueue($"#{_servedRequests} remote={ctx.Request.RemoteEndPoint} range={rangeHeader} -> 200 bytes={total}");
             using (var body = response.OutputStream)
-                CopySlice(0, total, body, ct);
+                CopySlice(0, total, body, ct, DelayForRemote(ctx));
         }
         catch (Exception)
         {
@@ -194,7 +200,15 @@ public sealed class RangeTestServer : IDisposable
         return;
     }
 
-    private void CopySlice(long start, long count, Stream output, CancellationToken ct)
+    private int DelayForRemote(HttpListenerContext ctx)
+    {
+        if (SlowRemotePrefix is null || SlowChunkDelayMs <= 0)
+            return ChunkDelayMs;
+        var remote = ctx.Request.RemoteEndPoint?.Address.ToString() ?? "";
+        return remote.StartsWith(SlowRemotePrefix, StringComparison.Ordinal) ? SlowChunkDelayMs : ChunkDelayMs;
+    }
+
+    private void CopySlice(long start, long count, Stream output, CancellationToken ct, int chunkDelayMs)
     {
         const int ChunkSize = 64 * 1024;
         var buffer = new byte[ChunkSize];
@@ -208,8 +222,8 @@ public sealed class RangeTestServer : IDisposable
             output.Flush();
             offset += len;
             remaining -= len;
-            if (ChunkDelayMs > 0)
-                Thread.Sleep(ChunkDelayMs);
+            if (chunkDelayMs > 0)
+                Thread.Sleep(chunkDelayMs);
         }
     }
 

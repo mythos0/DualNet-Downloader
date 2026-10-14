@@ -5,12 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Description>Dual-network (Ethernet + Wi-Fi) high speed download engine</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="DualNet.Tests" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
   </ItemGroup>
 
 </Project>

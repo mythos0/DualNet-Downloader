@@ -108,7 +108,7 @@
             <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
             <TextBlock Text="{Binding TabSpeedText}" FontSize="11" VerticalAlignment="Center"
                        IsVisible="{Binding IsDownloadTab}"
-                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                       Foreground="{DynamicResource DnTextTertiaryBrush}" />
           </StackPanel>
         </DataTemplate>
       </TabControl.ItemTemplate>
@@ -151,7 +151,7 @@
           <TextBlock Text="total:" Classes="hint" VerticalAlignment="Center" />
           <TextBlock Text="{Binding TotalSpeedText}" FontWeight="Bold" FontSize="13"
                      VerticalAlignment="Center" />
-          <TextBlock Text="v1.2.0" Classes="hint" VerticalAlignment="Center" />
+          <TextBlock Text="v1.3.0" Classes="hint" VerticalAlignment="Center" />
         </StackPanel>
       </Grid>
     </Border>

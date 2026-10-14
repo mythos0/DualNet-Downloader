@@ -16,7 +16,8 @@ public class DownloadEngineTests
         RetryCount = 4,
         StallTimeoutMs = 30_000,
         BufferSizeBytes = 64 * 1024,
-        LargeFileThresholdBytes = 500 * 1024 * 1024
+        LargeFileThresholdBytes = 500 * 1024 * 1024,
+        AdaptiveScaling = false   // these tests verify the STATIC plan; scaling has its own tests
     };
 
     private static byte[] RandomData(int size)

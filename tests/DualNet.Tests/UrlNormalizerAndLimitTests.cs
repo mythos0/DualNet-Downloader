@@ -117,31 +117,30 @@ public class BrowserNavigationTests
         var tab = vm.Tabs[0];
 
         tab.Navigate("example.com/first-file.zip");
-        Assert.Contains("example.com/first-file.zip", tab.UrlInput, StringComparison.Ordinal);
-        Assert.False(tab.CanGoBack);    // nothing before the first navigation
+        Assert.Contains("example.com/first-file.zip", tab.Browser.AddressText, StringComparison.Ordinal);
+        Assert.False(tab.Browser.CanGoBack);    // nothing before the first navigation
 
         tab.Navigate("https://mirror.example.net/second-file.bin");
-        Assert.True(tab.CanGoBack);
+        Assert.True(tab.Browser.CanGoBack);
 
-        tab.GoBackCommand.Execute(null);
-        Assert.Contains("first-file.zip", tab.UrlInput, StringComparison.Ordinal);
-        Assert.True(tab.CanGoForward);
+        tab.Browser.GoBackCommand.Execute(null);
+        Assert.Contains("first-file.zip", tab.Browser.AddressText, StringComparison.Ordinal);
+        Assert.True(tab.Browser.CanGoForward);
 
-        tab.GoForwardCommand.Execute(null);
-        Assert.Contains("second-file.bin", tab.UrlInput, StringComparison.Ordinal);
-        Assert.False(tab.CanGoForward);
+        tab.Browser.GoForwardCommand.Execute(null);
+        Assert.Contains("second-file.bin", tab.Browser.AddressText, StringComparison.Ordinal);
+        Assert.False(tab.Browser.CanGoForward);
     }
 
     [AvaloniaFact]
-    public void Navigate_RejectsInvalidInput_WithoutTouchingHistory()
+    public void Navigate_NonUrlInput_ResolvesToSearchEngineUrl()
     {
-        var window = CreateWindow();
-        var vm = Assert.IsType<MainViewModel>(window.DataContext);
-        var tab = vm.Tabs[0];
-
-        tab.Navigate("definitely not a url");
-        Assert.NotNull(tab.InputError);
-        Assert.False(tab.CanGoBack);
+        // Non-URL input is a search query in a real browser — it must not error.
+        Assert.Contains("lite.duckduckgo.com", DualNet.Core.Engine.Browser.BrowserService.ResolveInput("best linux downloader 2026", 0), StringComparison.Ordinal);
+        Assert.Contains("bing.com", DualNet.Core.Engine.Browser.BrowserService.ResolveInput("best linux downloader 2026", 1), StringComparison.Ordinal);
+        Assert.Contains("google.com", DualNet.Core.Engine.Browser.BrowserService.ResolveInput("best linux downloader 2026", 2), StringComparison.Ordinal);
+        // URL-ish input stays a URL and keeps https insertion.
+        Assert.StartsWith("https://example.com/file.zip", DualNet.Core.Engine.Browser.BrowserService.ResolveInput("example.com/file.zip", 0), StringComparison.Ordinal);
     }
 
     [AvaloniaFact]
@@ -152,9 +151,9 @@ public class BrowserNavigationTests
         var tab = vm.Tabs[0];
 
         tab.Navigate("https://example.com/home-test.bin");
-        tab.GoHomeCommand.Execute(null);
-        Assert.Equal("", tab.UrlInput);
-        Assert.True(tab.CanGoBack);     // the previous address is one step back
+        tab.Browser.GoHomeCommand.Execute(null);
+        Assert.Equal("", tab.Browser.AddressText);
+        Assert.True(tab.Browser.CanGoBack);     // the previous address is one step back
     }
 
     [AvaloniaFact]
@@ -167,7 +166,10 @@ public class BrowserNavigationTests
         Assert.NotNull(vm.Tabs[0].ResumeAllCommand);
         Assert.NotNull(vm.Tabs[0].RetryFailedCommand);
         Assert.NotNull(vm.Tabs[0].ClearFinishedCommand);
-        Assert.NotNull(vm.Tabs[0].NavigateCommand);
+        Assert.NotNull(vm.Tabs[0].DownloadFromAddressCommand);
+        Assert.NotNull(vm.Tabs[0].Browser.GoCommand);
+        Assert.NotNull(vm.Tabs[0].Browser.ToggleBookmarkCommand);
+        Assert.NotNull(vm.Tabs[0].Browser.OpenExternalCommand);
 
         // Item-level extras wired on a throwaway job wrapper.
         var job = new DualNet.Core.Engine.DownloadJob(

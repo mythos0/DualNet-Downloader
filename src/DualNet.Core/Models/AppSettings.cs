@@ -53,6 +53,15 @@ public sealed class AppSettings
     /// <summary>Optional custom endpoint for the per-adapter speed test (empty = Cloudflare).</summary>
     public string SpeedTestUrl { get; set; } = "";
 
+    /// <summary>
+    /// Dynamic segment scaling: keep adding connections while combined throughput improves
+    /// and hand work to idle adapters. Off = strict fixed 8/16 segment plan.
+    /// </summary>
+    public bool AdaptiveScaling { get; set; } = true;
+
+    /// <summary>Search engine used when a non-URL is typed in the address bar (index into SearchEngines.Names).</summary>
+    public int SearchEngine { get; set; }
+
     /// <summary>Sentry DSN (override to point the app at a fresh/rotated DSN without a rebuild).</summary>
     public string SentryDsn { get; set; } = "";
 

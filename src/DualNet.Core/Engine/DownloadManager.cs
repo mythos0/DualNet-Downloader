@@ -56,6 +56,7 @@ public sealed class DownloadManager : IDisposable
         SegmentsSmall = 8,
         SegmentsLarge = 16,
         RetryCount = Math.Clamp(Settings().RetryCount, 1, 20),
+        AdaptiveScaling = Settings().AdaptiveScaling,
     };
 
     private void TryStartOrQueue(DownloadJob job)

@@ -25,7 +25,7 @@ public static class SentrySetup
     private static string _dsn = DefaultDsn;
 
     public static string VersionText =>
-        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.2.0";
+        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.3.0";
 
     public static string ActiveDsn => _dsn;
 
@@ -305,5 +305,22 @@ public static class SentrySetup
         try { SentrySdk.Flush(TimeSpan.FromSeconds(3)); } catch { }
         try { _sentrySdk?.Dispose(); } catch { }
         _sentrySdk = null;
+    }
+
+    /// <summary>Test-only reset so the init lifecycle can be exercised repeatedly.</summary>
+    internal static void ResetForTests()
+    {
+        try { SentrySdk.Flush(TimeSpan.FromSeconds(1)); } catch { }
+        try { _sentrySdk?.Dispose(); } catch { }
+        _sentrySdk = null;
+        _initialized = false;
+        _dsn = DefaultDsn;
+    }
+
+    /// <summary>Test-only: mark Sentry as configured when the global SDK was initialized by the test.</summary>
+    internal static void UseDsnForTests(string dsn)
+    {
+        _dsn = dsn;
+        _initialized = true;
     }
 }

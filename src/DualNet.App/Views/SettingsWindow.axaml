@@ -68,6 +68,15 @@
         <TextBlock Text="port (default 45454)" Classes="hint" VerticalAlignment="Center" />
       </StackPanel>
 
+      <TextBlock Text="Speed &amp; connections" Classes="sectionTitle" />
+      <CheckBox Content="Adaptive segment scaling — keep adding connections while combined speed improves,
+                hand work to an idle adapter (recommended for max combined speed)"
+                IsChecked="{Binding AdaptiveScaling}" />
+
+      <TextBlock Text="Address bar search engine" Classes="sectionTitle" />
+      <ComboBox ItemsSource="{Binding SearchEngineNames}" SelectedIndex="{Binding SearchEngineIndex}"
+                MinWidth="220" ToolTip.Tip="Used when a non-URL is typed in the address bar" />
+
       <TextBlock Text="Speed test endpoint" Classes="sectionTitle" />
       <TextBox Text="{Binding SpeedTestUrl}" Watermark="empty = Cloudflare speed test (recommended)" />
 

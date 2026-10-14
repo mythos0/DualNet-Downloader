@@ -18,6 +18,7 @@ public class FeatureTests
     private static readonly DownloadOptions TestOptions = new()
     {
         SegmentsSmall = 8,
+        AdaptiveScaling = false,
         SegmentsLarge = 16,
         MinSegmentSizeBytes = 64 * 1024,
         RetryCount = 4,
@@ -152,6 +153,7 @@ public class FeatureTests
             {
                 SegmentsSmall = 4,
                 MinSegmentSizeBytes = 16 * 1024,
+                AdaptiveScaling = false,
                 RetryCount = 1,
                 StallTimeoutMs = 500,       // watchdog fires fast on the hung server
                 BufferSizeBytes = 16 * 1024
@@ -215,10 +217,48 @@ public class FeatureTests
             "loopback-test", IPAddress.Loopback, server.BaseUrl, 2 * 1024 * 1024,
             CancellationToken.None);
 
+        Assert.True(result.Success, $"expected success, got: {result.Error}");
         // Streaming reads overshoot the cap by at most one copy buffer.
         Assert.InRange(result.Bytes, 2 * 1024 * 1024, 2 * 1024 * 1024 + 1024 * 1024);
         Assert.True(result.MegabitsPerSecond > 0, "mbps must be positive");
         Assert.True(result.Seconds > 0);
+    }
+
+    [Fact]
+    public async Task SpeedTestService_FailedEndpoint_ReturnsFriendlyError_NeverThrows()
+    {
+        // A dead port: connection refused → the service must report, not throw.
+        int port;
+        using (var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0))
+        {
+            l.Start(); port = ((System.Net.IPEndPoint)l.LocalEndpoint).Port; l.Stop();
+        }
+
+        var result = await SpeedTestService.RunAsync(
+            "ghost", IPAddress.Loopback, $"http://127.0.0.1:{port}/down.bin",
+            1 * 1024 * 1024, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.NotNull(result.Error);
+        Assert.True(result.Error!.Length > 0);
+    }
+
+    [Fact]
+    public async Task SpeedTestService_StopsAtPayloadCap_OnUnlimitedBody()
+    {
+        // A server that ignores the size hint must still terminate: the payload cap
+        // bounds the measurement (no endless download through a fast loopback).
+        var data = RandomData(1 * 1024 * 1024);
+        using var server = new RangeTestServer(data) { ServeWithoutRanges = true };
+        server.Start();
+
+        var result = await SpeedTestService.RunAsync(
+            "loopback-test", IPAddress.Loopback, server.BaseUrl, SpeedTestService.MaxBytes,
+            CancellationToken.None);
+
+        // Either it stopped at MaxBytes, or the 8 s window cut it off — never hangs, never throws.
+        Assert.True(result.Success, $"expected success, got: {result.Error}");
+        Assert.True(result.Bytes <= SpeedTestService.MaxBytes + 1024 * 1024);
     }
 
     // ---- 7. categories ----------------------------------------------------------------------------------
