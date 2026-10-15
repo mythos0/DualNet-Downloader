@@ -8,172 +8,27 @@
              x:DataType="vm:DownloadTabViewModel"
              x:CompileBindings="True">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto,230">
-
-    <!-- ============ Browser toolbar (download tabs) ============ -->
-    <Border Grid.Row="0" Classes="urlbar" IsVisible="{Binding IsDownloadTab}">
-      <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
-
-        <Button Grid.Column="0" Classes="toolbtn nav" Content="◀" Command="{Binding Browser.GoBackCommand}"
-                IsEnabled="{Binding Browser.CanGoBack}" ToolTip.Tip="Back" />
-        <Button Grid.Column="1" Classes="toolbtn nav" Content="▶" Command="{Binding Browser.GoForwardCommand}"
-                IsEnabled="{Binding Browser.CanGoForward}" ToolTip.Tip="Forward" Margin="4,0,0,0" />
-        <Button Grid.Column="2" Classes="toolbtn nav" Content="↻" Command="{Binding Browser.ReloadCommand}"
-                ToolTip.Tip="Reload the page" Margin="4,0,0,0" />
-        <Button Grid.Column="3" Classes="toolbtn nav" Content="✕" Command="{Binding Browser.StopCommand}"
-                IsVisible="{Binding Browser.IsLoading}" ToolTip.Tip="Stop loading" Margin="4,0,0,0" />
-        <Button Grid.Column="4" Classes="toolbtn nav" Content="⌂" Command="{Binding Browser.GoHomeCommand}"
-                ToolTip.Tip="Home" Margin="4,0,8,0" />
-
-        <AutoCompleteBox x:Name="AddressBox" Grid.Column="5" Classes="address"
-                         Watermark="Search or type a link — Enter opens it over this tab's network  (Ctrl+L)"
-                         Text="{Binding Browser.AddressText}"
-                         ItemsSource="{Binding Browser.Suggestions}"
-                         FilterMode="None"
-                         MinimumPrefixLength="2"
-                         MaxDropDownHeight="240"
-                         TextChanged="OnAddressTextChanged"
-                         KeyDown="OnAddressKeyDown" />
-
-        <Button Grid.Column="6" Classes="toolbtn" Content="★" Command="{Binding Browser.ToggleBookmarkCommand}"
-                IsVisible="{Binding Browser.IsBookmarked}"
-                ToolTip.Tip="Bookmarked — click to remove" Margin="8,0,0,0" />
-        <Button Grid.Column="7" Classes="toolbtn" Content="☆" Command="{Binding Browser.ToggleBookmarkCommand}"
-                IsVisible="{Binding !Browser.IsBookmarked}"
-                ToolTip.Tip="Bookmark this page" Margin="8,0,0,0" />
-
-        <Button Grid.Column="8" Classes="toolbtn" Content="🔖" Margin="6,0,0,0" ToolTip.Tip="Bookmarks">
-          <Button.Flyout>
-            <Flyout Placement="BottomEdgeAlignedRight">
-              <Border Width="380">
-                <StackPanel>
-                  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
-                    <TextBlock Text="Bookmarks" FontWeight="Bold" />
-                    <TextBlock Grid.Column="1" Classes="hint" Text="☆ adds the current page" />
-                  </Grid>
-                  <ItemsControl ItemsSource="{Binding Browser.BookmarkList}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="storage:BookmarkEntry">
-                        <Grid ColumnDefinitions="*,Auto" Margin="0,2">
-                          <Button Classes="linkrow" HorizontalContentAlignment="Stretch"
-                                  Command="{Binding $parent[views:DownloadTabView].DataContext.Browser.OpenBookmarkCommand}"
-                                  CommandParameter="{Binding}"
-                                  ToolTip.Tip="{Binding Url}">
-                            <StackPanel Orientation="Vertical">
-                              <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
-                                         TextTrimming="CharacterEllipsis" MaxWidth="300" />
-                              <TextBlock Text="{Binding Url}" Classes="hint" FontSize="10.5"
-                                         TextTrimming="CharacterEllipsis" MaxWidth="300" />
-                            </StackPanel>
-                          </Button>
-                          <Button Grid.Column="1" Classes="toolbtn" Content="✕" Padding="6,2" MinWidth="0"
-                                  Command="{Binding $parent[views:DownloadTabView].DataContext.Browser.RemoveBookmarkCommand}"
-                                  CommandParameter="{Binding}" ToolTip.Tip="Remove bookmark" />
-                        </Grid>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <TextBlock Classes="hint" Text="No bookmarks yet — press ☆ on any page."
-                             IsVisible="{Binding !Browser.HasBookmarks}" />
-                </StackPanel>
-              </Border>
-            </Flyout>
-          </Button.Flyout>
-        </Button>
-
-        <Button Grid.Column="9" Classes="toolbtn" Content="🕘" Margin="6,0,0,0" ToolTip.Tip="Browser history">
-          <Button.Flyout>
-            <Flyout Placement="BottomEdgeAlignedRight">
-              <Border Width="400">
-                <StackPanel>
-                  <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6">
-                    <TextBlock Text="Pages visited" FontWeight="Bold" />
-                    <Button Grid.Column="1" Classes="toolbtn" Content="Clear" Padding="8,2" MinWidth="0"
-                            Command="{Binding Browser.ClearBrowserHistoryCommand}" />
-                  </Grid>
-                  <ItemsControl ItemsSource="{Binding Browser.VisitedList}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="storage:VisitedEntry">
-                        <Button Classes="linkrow" HorizontalContentAlignment="Stretch" Margin="0,2"
-                                Command="{Binding $parent[views:DownloadTabView].DataContext.Browser.OpenVisitedCommand}"
-                                CommandParameter="{Binding}"
-                                ToolTip.Tip="{Binding Url}">
-                          <StackPanel Orientation="Vertical">
-                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="320" />
-                            <TextBlock Text="{Binding Url}" Classes="hint" FontSize="10.5"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="320" />
-                          </StackPanel>
-                        </Button>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <TextBlock Classes="hint" Text="No browser history yet."
-                             IsVisible="{Binding !Browser.HasVisited}" />
-                </StackPanel>
-              </Border>
-            </Flyout>
-          </Button.Flyout>
-        </Button>
-
-        <Button Grid.Column="10" Classes="toolbtn" Content="📖" Command="{Binding Browser.ToggleReaderViewCommand}"
-                ToolTip.Tip="Toggle reader view (extracted text version of the current page)" Margin="6,0,0,0" />
-        <Button Grid.Column="11" Classes="toolbtn" Content="↗" Command="{Binding Browser.OpenExternalCommand}"
-                ToolTip.Tip="Open the current page in your system browser" Margin="4,0,0,0" />
-        <Button Grid.Column="12" Classes="accent" Content="⤓ Download" Command="{Binding DownloadFromAddressCommand}"
-                ToolTip.Tip="Skip browsing — queue the address bar links directly" Margin="8,0,0,0" />
-
-        <!-- Scope + quick actions row -->
-        <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="13" ColumnDefinitions="*,Auto" Margin="2,8,0,0">
-          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="{Binding ScopeHint}" Classes="hint" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding Browser.StatusText}" Classes="dim" VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis" MaxWidth="420" />
-            <TextBlock Text="{Binding InputError}" Classes="error"
-                       IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420" />
-          </StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-            <Button Classes="toolbtn mini" Content="📋" Command="{Binding PasteFromClipboardCommand}"
-                    ToolTip.Tip="Paste from clipboard into the address bar" />
-            <Button Classes="toolbtn mini" Content="⏸ all" Command="{Binding PauseAllCommand}"
-                    ToolTip.Tip="Pause every download in this tab" />
-            <Button Classes="toolbtn mini" Content="▶ all" Command="{Binding ResumeAllCommand}"
-                    ToolTip.Tip="Resume paused / queued / failed downloads" />
-            <Button Classes="toolbtn mini" Content="↻ failed" Command="{Binding RetryFailedCommand}"
-                    ToolTip.Tip="Retry all failed downloads" />
-            <Button Classes="toolbtn mini" Content="🧹 finished" Command="{Binding ClearFinishedCommand}"
-                    ToolTip.Tip="Remove completed / failed / canceled entries from the list" />
-          </StackPanel>
-        </Grid>
-      </Grid>
-    </Border>
-
-    <!-- History toolbar -->
-    <Border Grid.Row="0" Classes="urlbar" IsVisible="{Binding IsHistoryTab}">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock Text="Completed and failed downloads are recorded here."
-                   Classes="hint" VerticalAlignment="Center" />
-        <Button Grid.Column="1" Classes="toolbtn" Content="Clear history"
-                Command="{Binding ClearHistoryCommand}" />
-      </Grid>
-    </Border>
+  <Grid RowDefinitions="Auto,*,Auto">
 
     <!-- Thin browser load progress -->
-    <ProgressBar Grid.Row="1" Height="3" MinHeight="3" CornerRadius="2" Margin="0,2,0,0"
+    <ProgressBar Grid.Row="0" Height="3" MinHeight="3" CornerRadius="2"
                  IsVisible="{Binding IsDownloadTab}"
                  IsIndeterminate="{Binding Browser.IsLoading}" />
 
     <!-- ============ Main content ============ -->
-    <Panel Grid.Row="2">
+    <Panel Grid.Row="1">
 
       <!-- History rows -->
       <ScrollViewer IsVisible="{Binding IsHistoryTab}">
-        <StackPanel>
-          <TextBlock Classes="empty"
+        <StackPanel MaxWidth="980" HorizontalAlignment="Stretch" Margin="18,10,18,16">
+          <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+            <TextBlock Text="History" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="mini" Content="🗑 Clear history" Command="{Binding ClearHistoryCommand}" />
+          </Grid>
+          <TextBlock Classes="empty" Margin="0,30,0,0"
                      Text="No history yet — finished downloads appear here."
                      IsVisible="{Binding ShowHistoryEmpty}" />
-          <ItemsControl ItemsSource="{Binding HistoryEntries}" Margin="0,8,0,0">
+          <ItemsControl ItemsSource="{Binding HistoryEntries}" Margin="0,4,0,0">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:HistoryItemViewModel">
                 <Border Classes="card" Margin="0,0,0,9">
@@ -201,28 +56,33 @@
         </StackPanel>
       </ScrollViewer>
 
-      <!-- Embedded browser -->
+      <!-- Embedded browser (Chromium on Windows, reader view elsewhere) -->
       <Panel IsVisible="{Binding IsDownloadTab}">
         <views:BrowserPane DataContext="{Binding Browser}" />
       </Panel>
     </Panel>
 
-    <!-- Row splitter between browser and downloads -->
-    <GridSplitter Grid.Row="3" Height="7" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                  IsVisible="{Binding IsDownloadTab}" Background="Transparent" />
+    <!-- ============ Downloads shelf (Chrome-style bottom bar) ============ -->
+    <Border Grid.Row="2" Classes="shelf" IsVisible="{Binding IsDownloadTab}">
+      <Grid RowDefinitions="Auto,Auto,*" IsVisible="{Binding ShowShelf}">
 
-    <!-- ============ Downloads section ============ -->
-    <Border Grid.Row="4" Classes="graphbar" IsVisible="{Binding IsDownloadTab}">
-      <Grid RowDefinitions="Auto,Auto,*" Margin="0,0,0,0">
-
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,4">
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <TextBlock Text="⤓ Downloads" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" />
             <TextBlock Text="{Binding ItemSummaryText}" Classes="hint" VerticalAlignment="Center" />
             <TextBlock Text="{Binding TabSpeedText}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding ScopeHint}" Classes="hint" VerticalAlignment="Center"
+                       Margin="6,0,0,0" IsVisible="{Binding IsCombined}" />
+            <TextBlock Text="{Binding Browser.StatusText}" Classes="dim" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" MaxWidth="380"
+                       IsVisible="{Binding Browser.StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock Text="{Binding InputError}" Classes="error"
+                       IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="380" />
           </StackPanel>
+
           <ItemsControl Grid.Column="1" ItemsSource="{Binding AdapterSpeedChips}"
-                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                        Margin="14,0,0,0" VerticalAlignment="Center">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <StackPanel Orientation="Horizontal" Spacing="6" />
@@ -240,21 +100,28 @@
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
             <Button Classes="toolbtn mini" Content="⚡ test speed" Command="{Binding RunSpeedTestCommand}"
                     ToolTip.Tip="Measure real bandwidth through this tab's adapter(s)" />
-            <Button Classes="toolbtn mini" Content="🗑" Command="{Binding ClearFinishedCommand}"
-                    ToolTip.Tip="Clear finished entries" />
+            <Button Classes="toolbtn mini" Content="⏸ all" Command="{Binding PauseAllCommand}"
+                    ToolTip.Tip="Pause every download in this tab" />
+            <Button Classes="toolbtn mini" Content="▶ all" Command="{Binding ResumeAllCommand}"
+                    ToolTip.Tip="Resume paused / queued / failed downloads" />
+            <Button Classes="toolbtn mini" Content="↻ failed" Command="{Binding RetryFailedCommand}"
+                    ToolTip.Tip="Retry all failed downloads" />
+            <Button Classes="toolbtn mini" Content="🧹 finished" Command="{Binding ClearFinishedCommand}"
+                    ToolTip.Tip="Remove completed / failed / canceled entries from the list" />
           </StackPanel>
         </Grid>
 
         <controls:SpeedGraph Grid.Row="1" Height="42" x:Name="Graph" Margin="0,0,0,6" />
 
-        <ScrollViewer Grid.Row="2">
+        <ScrollViewer Grid.Row="2" MaxHeight="240">
           <Panel>
             <TextBlock Classes="hint" HorizontalAlignment="Center" Margin="0,10,0,0"
                        IsVisible="{Binding ShowEmptyListHint}"
-                       Text="Nothing here yet — browse a page above, or type a link and press Enter. Files start downloading automatically over this tab's network." />
+                       Text="Nothing downloading yet — browse or type a link in the address bar above. Files download over every active network automatically." />
             <ItemsControl ItemsSource="{Binding Items}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:DownloadItemViewModel">

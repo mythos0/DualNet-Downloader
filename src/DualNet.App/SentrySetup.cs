@@ -37,7 +37,7 @@ public static class SentrySetup
     private static string _dsn = DefaultDsn;
 
     public static string VersionText =>
-        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.4.0";
+        Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "2.0.0";
 
     public static string ActiveDsn => _dsn;
 

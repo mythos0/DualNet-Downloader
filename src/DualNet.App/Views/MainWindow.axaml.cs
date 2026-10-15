@@ -125,5 +125,53 @@ public partial class MainWindow : Window
         }
     }
 
+    // ---- chrome toolbar handlers --------------------------------------------------------------
+
+    /// <summary>✕ on a tab header — closes that tab.</summary>
+    private void OnCloseTabClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && (sender as Button)?.DataContext is DownloadTabViewModel tab)
+            vm.CloseTabCommand.Execute(tab);
+    }
+
+    private void OnAddressTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (sender is AutoCompleteBox box && DataContext is MainViewModel vm)
+            vm.SelectedTab?.Browser.UpdateSuggestions(box.Text);
+    }
+
+    private void OnAddressKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Enter or Key.Return && DataContext is MainViewModel vm &&
+            vm.SelectedTab is { } tab && !e.Handled)
+        {
+            tab.Browser.GoCommand.Execute(tab.Browser.AddressText);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Chrome keyboard shortcuts: Ctrl+T new tab, Ctrl+W close tab, Ctrl+L focus omnibox.</summary>
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        switch (e.Key)
+        {
+            case Key.T when ctrl:
+                vm.NewTabCommand.Execute(null);
+                e.Handled = true;
+                break;
+            case Key.W when ctrl:
+                vm.CloseTabCommand.Execute(vm.SelectedTab);
+                e.Handled = true;
+                break;
+            case Key.L when ctrl:
+                Omnibox?.Focus();
+                e.Handled = true;
+                break;
+        }
+    }
+
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 }

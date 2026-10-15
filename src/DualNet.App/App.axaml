@@ -25,6 +25,15 @@
           <SolidColorBrush x:Key="DnTextPrimaryBrush" Color="#EAF0FB" />
           <SolidColorBrush x:Key="DnTextSecondaryBrush" Color="#B9C4DA" />
           <SolidColorBrush x:Key="DnTextTertiaryBrush" Color="#93A1BC" />
+          <!-- Chrome (the browser) window palette — dark -->
+          <SolidColorBrush x:Key="DnChromeStripBrush" Color="#202124" />
+          <SolidColorBrush x:Key="DnChromeToolbarBrush" Color="#35363A" />
+          <SolidColorBrush x:Key="DnChromeContentBrush" Color="#202124" />
+          <SolidColorBrush x:Key="DnChromeTabHoverBrush" Color="#45494E" />
+          <SolidColorBrush x:Key="DnChromeOmniboxBrush" Color="#202124" />
+          <SolidColorBrush x:Key="DnChromeMenuBrush" Color="#292A2D" />
+          <SolidColorBrush x:Key="DnChromeTileBrush" Color="#292A2D" />
+          <SolidColorBrush x:Key="DnChromeStrokeBrush" Color="#3C4043" />
         </ResourceDictionary>
 
         <!-- ============ Light palette ============ -->
@@ -43,6 +52,15 @@
           <SolidColorBrush x:Key="DnTextPrimaryBrush" Color="#17202F" />
           <SolidColorBrush x:Key="DnTextSecondaryBrush" Color="#45526B" />
           <SolidColorBrush x:Key="DnTextTertiaryBrush" Color="#5F6E8C" />
+          <!-- Chrome (the browser) window palette — light -->
+          <SolidColorBrush x:Key="DnChromeStripBrush" Color="#DEE1E6" />
+          <SolidColorBrush x:Key="DnChromeToolbarBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="DnChromeContentBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="DnChromeTabHoverBrush" Color="#E8EAED" />
+          <SolidColorBrush x:Key="DnChromeOmniboxBrush" Color="#F1F3F4" />
+          <SolidColorBrush x:Key="DnChromeMenuBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="DnChromeTileBrush" Color="#F1F3F4" />
+          <SolidColorBrush x:Key="DnChromeStrokeBrush" Color="#DADCE0" />
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
 
@@ -292,6 +310,150 @@
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="MinHeight" Value="7" />
       <Setter Property="Foreground" Value="{DynamicResource DnAccentGradient}" />
+    </Style>
+
+    <!-- ================= Chrome browser shell ================= -->
+    <!-- Tab strip: Chrome-shaped tabs (rounded top, merge into the toolbar when active). -->
+    <Style Selector="ListBox.chromeTabs">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="40" />
+    </Style>
+    <Style Selector="ListBox.chromeTabs ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border x:Name="Root" CornerRadius="9,9,0,0" Background="Transparent"
+                  Height="34" MinWidth="150" MaxWidth="230" Margin="2,6,0,0"
+                  VerticalAlignment="Bottom">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              VerticalAlignment="Stretch" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox.chromeTabs ListBoxItem:pointerover /template/ Border#Root">
+      <Setter Property="Background" Value="{DynamicResource DnChromeTabHoverBrush}" />
+    </Style>
+    <Style Selector="ListBox.chromeTabs ListBoxItem:selected /template/ Border#Root">
+      <Setter Property="Background" Value="{DynamicResource DnChromeToolbarBrush}" />
+    </Style>
+
+    <!-- Toolbar buttons: circular ghost buttons like Chrome's. -->
+    <Style Selector="Button.chromeBtn">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="17" />
+      <Setter Property="Width" Value="34" />
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.chromeBtn:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DnChromeTabHoverBrush}" />
+    </Style>
+    <Style Selector="Button.newTabBtn">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="15" />
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.newTabBtn:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DnChromeTabHoverBrush}" />
+    </Style>
+    <Style Selector="Button.tabClose">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tabClose:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DnChromeTabHoverBrush}" />
+    </Style>
+
+    <!-- Omnibox pill. -->
+    <Style Selector="Border.omnibox">
+      <Setter Property="Background" Value="{DynamicResource DnChromeOmniboxBrush}" />
+      <Setter Property="CornerRadius" Value="17" />
+      <Setter Property="Padding" Value="10,3,8,3" />
+      <Setter Property="MinHeight" Value="34" />
+    </Style>
+    <Style Selector="AutoCompleteBox.omniInput">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="Button.tabStar">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tabStar:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DnChromeTabHoverBrush}" />
+    </Style>
+
+    <!-- Download badge on the toolbar button. -->
+    <Style Selector="Border.dlBadge">
+      <Setter Property="Background" Value="#E81123" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="MinWidth" Value="15" />
+      <Setter Property="Height" Value="15" />
+      <Setter Property="Padding" Value="3,0" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Margin" Value="0,1,1,0" />
+    </Style>
+    <Style Selector="Border.dlBadge TextBlock">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontSize" Value="9.5" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Downloads shelf under the page (Chrome's bottom downloads bar). -->
+    <Style Selector="Border.shelf">
+      <Setter Property="Background" Value="{DynamicResource DnChromeToolbarBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DnChromeStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+      <Setter Property="Padding" Value="12,8" />
+    </Style>
+
+    <!-- New tab page shortcut tiles. -->
+    <Style Selector="Button.ntpTile">
+      <Setter Property="Background" Value="{DynamicResource DnChromeTileBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="14,10" />
+      <Setter Property="Width" Value="104" />
+    </Style>
+    <Style Selector="Button.ntpTile:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource DnChromeTabHoverBrush}" />
     </Style>
   </Application.Styles>
 </Application>

@@ -223,6 +223,14 @@ public partial class BrowserViewModel : ObservableObject
                 _pendingWebUrl = null;
                 web.Navigate(url);
             }
+            else if (web.ReadyCount > 1)
+            {
+                // Re-attached after a tab switch rebuilt the view: the native engine is a
+                // fresh session, so reload the page this tab was showing.
+                var current = (AddressText ?? "").Trim();
+                if (current.Length > 0 && !current.StartsWith("about:", StringComparison.OrdinalIgnoreCase))
+                    web.Navigate(current);
+            }
         });
 
         web.NavigationStarting += url => Dispatcher.UIThread.Post(() =>

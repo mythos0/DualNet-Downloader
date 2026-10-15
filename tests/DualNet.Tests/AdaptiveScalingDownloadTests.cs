@@ -130,6 +130,65 @@ public class AdaptiveScalingDownloadTests
     }
 
     [Fact]
+    public async Task FinishedConnections_ImmediatelyClaimWork_FromAnyNetwork()
+    {
+        // The user-reported defect: segments were statically divided per NIC — once the
+        // fast network finished its own share it sat lazy while the slow network crawled
+        // through its pre-assigned halves. Connections must instead claim the next piece
+        // from ANY network the instant they finish.
+        //
+        // Two segments only (one per NIC), so the fast NIC starts with exactly ONE piece
+        // and must spend the rest of the download chewing through the slow NIC's half.
+        // With claim-on-finish the fast NIC ends up carrying ~95% of the bytes; with the
+        // old tick-based stealing it carried barely more than half.
+        var data = RandomData(12 * 1024 * 1024);
+        using var server = new RangeTestServer(data)
+        {
+            SlowRemotePrefix = "127.0.0.1",
+            SlowChunkDelayMs = 250,        // ≈0.26 MB/s per slow connection
+        };
+        server.Start();
+
+        var dir = NewTempDir();
+        try
+        {
+            var options = ScalingOptions();
+            options.SegmentsSmall = 2;     // one piece per NIC — the fast NIC must steal the rest
+            options.MaxSegmentsCap = 12;
+
+            // Slot 0 = slow NIC, slot 1 = fast NIC (bind order matters).
+            var binds = new[] { IPAddress.Loopback, IPAddress.Parse("127.0.0.2") };
+            var job = new DownloadJob(server.BaseUrl, binds, new DownloadScope("All", new List<string>()), dir, options);
+
+            var claims = new System.Collections.Concurrent.ConcurrentBag<string>();
+            job.DiagnosticEvent += (_, kind, message) =>
+            {
+                if (kind == "work_claim") claims.Add(message);
+            };
+
+            job.Start();
+            await job.Completion.WaitAsync(TimeSpan.FromSeconds(120));
+
+            AssertCompleted(job);
+            Assert.Equal(data.Length, new FileInfo(job.FilePath).Length);
+            Assert.Equal(Convert.ToHexString(SHA256.HashData(data)), Sha256File(job.FilePath));
+
+            long slow = job.PerAdapterBytesTotal[0];
+            long fast = job.PerAdapterBytesTotal[1];
+            Assert.True(slow > 0, "the slow adapter must still carry some traffic");
+            Assert.True(fast > 2 * slow,
+                $"fast NIC went lazy again: slow={slow} fast={fast} — " +
+                "finished connections must claim work across networks, not retire");
+
+            Assert.NotEmpty(claims);   // cross-NIC work claiming actually happened
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task ScalingDisabled_KeepsStaticPlan()
     {
         var data = RandomData(2 * 1024 * 1024);

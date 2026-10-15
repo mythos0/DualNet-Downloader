@@ -2,7 +2,9 @@
 
 **A Windows download manager that uses your Ethernet cable AND Wi-Fi adapter at the same time for maximum download speed.**
 
-DualNet splits every file into byte-range segments and streams them **simultaneously through multiple network adapters**, then reassembles everything into the original file — byte-identical, verified by size. Each download tab can also be pinned to a single adapter (Ethernet-only or Wi-Fi-only).
+DualNet splits every file into byte-range segments and streams them **simultaneously through multiple network adapters**, then reassembles everything into the original file — byte-identical, verified by size. Segments are **never permanently assigned to one network**: the moment a connection finishes a piece, it immediately claims the next piece — from whichever network still has work — so a fast NIC never sits idle while a slow one crawls. Each download tab can also be pinned to a single adapter (Ethernet-only or Wi-Fi-only).
+
+The app itself is a **Chrome-style browser**: Chromium (WebView2) renders every tab, uBlock Origin Lite ships preinstalled, and the download manager lives in the downloads shelf and the ⋮ menu — a real browser with dual-NIC downloading built in.
 
 ```
                   ┌──────────────────────┐
@@ -27,8 +29,16 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
   each segment through the cable *and* the radio at the same time.
 - **Automatic file splitting** — 8 segments below 500 MB, 16 above, never smaller than 2 MB
   each, interleaved across adapters (segment *i* → adapter *i % n*).
-- **Real Chromium browser in every tab** (v1.4.0) — network tabs host **Microsoft Edge
-  WebView2** (the same engine as Edge/Chrome: full JavaScript, CSS, cookies, logins, PDFs).
+- **Chrome-style UI (v2.0.0)** — the whole window is rebuilt to look and behave like Google
+  Chrome: a real **tab strip** (rounded Chrome tabs, favicon/glyph, ✕ close, ＋ new tab,
+  Ctrl+T / Ctrl+W / Ctrl+L), a Chrome **toolbar** (◀ ▶ ↻/✕ ⌂ + omnibox with lock icon,
+  ★ bookmark, ⤓ downloads button with a red active-count badge, 🌐 networks flyout, ⋮ menu),
+  a Chrome-style **New Tab page** (search box + shortcut tiles), and a **downloads shelf**
+  docked under the page that shows per-NIC speeds, a live speed graph and every download card.
+  A 🌐 flyout lists all networks (add/remove manual providers, rescan), and the ⋮ menu holds
+  pause/resume/retry-all, clipboard monitor, auto-shutdown, theme, history export and settings.
+- **Real Chromium browser in every tab** — tabs host **Microsoft Edge WebView2** (the same
+  engine as Edge/Chrome: full JavaScript, CSS, cookies, logins, PDFs).
   Every managed **download is intercepted** and routed into DualNet's dual-NIC segment engine,
   so files grabbed while browsing still use Ethernet + Wi-Fi simultaneously. Pop-ups and
   target=_blank stay in-tab. On machines without the WebView2 Runtime (or when disabled in
@@ -36,20 +46,28 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
   adapters: address bar with search fallback (DuckDuckGo Lite / Bing / Google), Back ◀ /
   Forward ▶ / Reload ↻ / Stop ✕ / Home ⌂, reader-view rendering (headings, paragraphs, lists,
   quotes, code, images, tables), a **Links panel** with a `Files only` filter and one-click
-  **⤓ download through the tab's network**, automatic **file detection**, **bookmarks** (🔖 / ☆),
-  **browser history** (🕘), address-bar suggestions, `Ctrl+L`, **📖 reader view** on demand, and
-  **↗ open in system browser** as a last resort.
-- **Adaptive segment scaling v2 (max combined speed)** — while a download runs, the engine
-  keeps evaluating throughput with EMA-smoothed multi-second windows: if extra connections buy
-  more bandwidth it **splits the largest remaining segments and opens new connections** (up to
-  64, default cap 32 — configurable in settings), escalates while the gains keep coming, and
-  when one adapter finishes its share it **steals work from the busy adapter** so the fast NIC
-  never idles. A scaler that hits a server-side cap **stands down gracefully but re-probes
-  every ~30 s** — when the server frees capacity (or you leave a hotspot), the download
-  automatically speeds back up. Combined downloads show the **live per-NIC Mbps share** right
-  on the download card, so you can always verify both networks are pulling. This is what lets
-  Combined downloads actually saturate Ethernet + Wi-Fi even when the server caps throughput
-  per connection (IDM-style dynamic file segmentation).
+  **⤓ download through the tab's network**, automatic **file detection**, **bookmarks** (☆),
+  **browser history**, address-bar suggestions, **📖 reader view** on demand, and
+  **↗ open in system browser** as a last resort. Switching tabs and coming back restores the
+  page automatically.
+- **uBlock Origin Lite preinstalled (v2.0.0)** — the official **uBOLite MV3** package
+  (GPLv3, © Raymond Hill & contributors) ships inside the app: on first run it is extracted
+  to `%LOCALAPPDATA%\DualNet\Extensions\uBlockOriginLite` and loaded as a **native WebView2
+  browser extension** (`AreBrowserExtensionsEnabled`), so ads and trackers are filtered in
+  every Chromium tab out of the box — exactly like installing the Chrome extension, no setup.
+  Updates replace the extracted package when a new build ships with a newer uBOLite version.
+- **Dynamic segment scheduling v3 (max combined speed, no lazy NICs)** — every connection
+  is a worker that **loops**: the moment it finishes its piece it atomically claims the tail
+  of the **largest remaining piece — from any adapter** (claim-on-finish, zero idle gaps).
+  Segments are never permanently divided per network; the fast NIC keeps pulling work until
+  the last byte. On top of that, the scaler keeps evaluating throughput with EMA-smoothed
+  multi-second windows: if extra connections buy more bandwidth it **opens new connections**
+  by splitting the largest remaining segments (up to 64, default cap 32 — configurable in
+  settings), escalates while the gains keep coming, and a scaler that hits a server-side cap
+  **stands down gracefully but re-probes every ~30 s**. Combined downloads show the **live
+  per-NIC Mbps share** right on the download card. This is what lets Combined downloads
+  actually saturate Ethernet + Wi-Fi even when the server caps throughput per connection
+  (IDM-style dynamic file segmentation).
 - **Clipboard link watcher** — copy a link anywhere and a one-click **⤓ Download** banner
   appears in the status bar (toggle 📋 in the toolbar).
 - **Bulk actions** — ⏸ pause all, ▶ resume all, ↻ retry failed, 🧹 clear finished — per tab.
@@ -104,7 +122,7 @@ DualNet splits every file into byte-range segments and streams them **simultaneo
 
 ## Install
 
-Download **`DualNetDownloader-1.4.0-win-x64.exe`** from the
+Download **`DualNetDownloader-2.0.0-win-x64.exe`** from the
 [Releases page](https://github.com/mythos0/DualNet-Downloader/releases) and run it —
 no .NET runtime or installer required. Full browsing uses the **Evergreen WebView2 Runtime**
 (preinstalled on Windows 10/11; the app falls back to the reader browser when absent).
@@ -115,11 +133,14 @@ no .NET runtime or installer required. Full browsing uses the **Evergreen WebVie
    - **⚡ Combined** — file is split across **all** adapters (default, fastest).
    - **🔌 <Ethernet name>** — downloads use only the Ethernet cable.
    - **📶 <Wi-Fi name>** — downloads use only the Wi-Fi adapter.
+   - **🌐 New tab** (＋) — a fresh Chromium browser tab over all networks.
    - **🕘 History** — past downloads.
-2. **Browse or download from the address bar** — Enter opens the page in the tab's real
-   Chromium browser (or the reader view when WebView2 is unavailable; Back ◀ / Forward ▶ /
-   Reload ↻ / Stop ✕ / Home ⌂ / 📖 reader navigate like any browser); when you land on a
-   file, the segmented download starts automatically over that tab's network.
+2. **Browse or download from the omnibox** — Enter opens the page in the tab's real
+   Chromium browser (with uBlock Origin Lite already filtering ads; falls back to the
+   reader view when WebView2 is unavailable; ◀ ▶ ↻/✕ ⌂ navigate like any browser); when
+   you land on a file, the segmented download starts automatically over that tab's networks.
+3. **⤓ toolbar button** — show/hide the downloads shelf (live per-NIC speeds, speed graph,
+   every download card). The red badge shows how many downloads are running.
    **⤓ Download** queues the links directly without browsing. Non-URL input searches via
    DuckDuckGo Lite / Bing / Google (choose in settings). Multiple links (one per line) become
    multiple downloads. The **Links panel** on the right lists every link of the open page —

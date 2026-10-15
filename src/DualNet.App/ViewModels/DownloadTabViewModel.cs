@@ -17,8 +17,14 @@ public enum TabKind { Combined, SingleAdapter, History }
 /// </summary>
 public partial class DownloadTabViewModel : ObservableObject
 {
-    public string Title { get; }
-    public string Glyph { get; }
+    [ObservableProperty] private string title;
+    [ObservableProperty] private string glyph;
+    [ObservableProperty] private bool showShelf = true;
+    public string BaseTitle { get; }
+
+    /// <summary>Chrome behavior: the tab label follows the page title (new browser tabs only).</summary>
+    public bool FollowsPageTitle { get; set; }
+
     public IBrush AccentBrush { get; }
     public TabKind Kind { get; }
     public NetworkAdapterInfo? Adapter { get; }
@@ -67,7 +73,7 @@ public partial class DownloadTabViewModel : ObservableObject
     {
         Kind = kind;
         Adapter = adapter;
-        (Glyph, Title, AccentBrush, ScopeLabel) = kind switch
+        var (g, t, brush, scope) = kind switch
         {
             TabKind.Combined => ("⚡", "Combined", new SolidColorBrush(Color.Parse("#22D3EE")), "All"),
             TabKind.SingleAdapter when adapter is { } a => (
@@ -77,11 +83,26 @@ public partial class DownloadTabViewModel : ObservableObject
                 a.Id),
             _ => ("🕘", "History", new SolidColorBrush(Color.Parse("#9CA3AF")), "History")
         };
+        glyph = g;
+        title = t;
+        BaseTitle = t;
+        AccentBrush = brush;
+        ScopeLabel = scope;
 
         Browser = new BrowserViewModel(
             ResolveTabBinds,
             url => AddDownload(url, out _),
             AppServices.BrowserData);
+
+        // Chrome-like tab label: free-form browser tabs (created with ＋) rename
+        // themselves to the loaded page's title.
+        Browser.PropertyChanged += (_, e) =>
+        {
+            if (!FollowsPageTitle || e.PropertyName != nameof(BrowserViewModel.PageTitle))
+                return;
+            var page = Browser.PageTitle;
+            Title = string.IsNullOrWhiteSpace(page) ? BaseTitle : page;
+        };
 
         if (kind == TabKind.History)
         {

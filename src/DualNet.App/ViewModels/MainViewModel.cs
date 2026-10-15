@@ -24,6 +24,14 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string? clipboardBannerText;
     [ObservableProperty] private string shutdownHint = "";
     [ObservableProperty] private string scheduleStatus = "";
+    [ObservableProperty] private bool showShelf = true;
+    [ObservableProperty] private int activeDownloadCount;
+
+    public bool HasActiveDownloads => ActiveDownloadCount > 0;
+
+    partial void OnActiveDownloadCountChanged(int value) => OnPropertyChanged(nameof(HasActiveDownloads));
+
+    partial void OnSelectedTabIndexChanged(int value) => OnPropertyChanged(nameof(SelectedTab));
 
     public bool HasClipboardBanner => ClipboardUrl is not null;
     public bool ShowShutdownHint => ShutdownHint.Length > 0;
@@ -498,8 +506,88 @@ public partial class MainViewModel : ObservableObject
     {
         double sum = Tabs.Where(t => t.Kind != TabKind.History).Sum(t => t.TabSpeedBps);
         TotalSpeedText = Formatter.Speed(sum);
+        ActiveDownloadCount = AppServices.Manager.Jobs.Count(j =>
+            j.Status is DownloadStatus.Downloading or DownloadStatus.Preparing
+                     or DownloadStatus.Queued or DownloadStatus.Pausing);
         CheckSchedule();
     }
+
+    // ---- Chrome-style tab management -------------------------------------------------------------
+
+    /// <summary>＋ button / Ctrl+T: opens a fresh browser tab over all active networks.</summary>
+    [RelayCommand]
+    private void NewTab()
+    {
+        var tab = new DownloadTabViewModel(TabKind.Combined)
+        {
+            FollowsPageTitle = true,
+            ShowShelf = ShowShelf
+        };
+        tab.Glyph = "🌐";
+        tab.Diagnostic += OnTabDiagnostic;
+        Tabs.Insert(Math.Max(0, Tabs.IndexOf(HistoryTab)), tab);
+        SelectedTabIndex = Tabs.IndexOf(tab);
+    }
+
+    /// <summary>✕ on a tab: closes it; the last tab is never removed.</summary>
+    [RelayCommand]
+    private void CloseTab(DownloadTabViewModel? tab)
+    {
+        if (tab is null || tab == HistoryTab || !Tabs.Contains(tab))
+            return;
+        int index = Tabs.IndexOf(tab);
+        Tabs.Remove(tab);
+        tab.Shutdown();
+        if (Tabs.Count == 0)
+        {
+            NewTab();
+            return;
+        }
+        SelectedTabIndex = Math.Clamp(index, 0, Tabs.Count - 1);
+    }
+
+    /// <summary>⤓ toolbar button: shows/hides the downloads shelf (all tabs together).</summary>
+    [RelayCommand]
+    private void ToggleShelf()
+    {
+        ShowShelf = !ShowShelf;
+        foreach (var tab in Tabs)
+            tab.ShowShelf = ShowShelf;
+    }
+
+    // ---- ⋮ menu commands (act across every tab) ----------------------------------------------------
+
+    [RelayCommand]
+    private void PauseAllEverywhere()
+    {
+        foreach (var tab in Tabs.Where(t => t.IsDownloadTab))
+            tab.PauseAllCommand.Execute(null);
+    }
+
+    [RelayCommand]
+    private void ResumeAllEverywhere()
+    {
+        foreach (var tab in Tabs.Where(t => t.IsDownloadTab))
+            tab.ResumeAllCommand.Execute(null);
+    }
+
+    [RelayCommand]
+    private void RetryFailedEverywhere()
+    {
+        foreach (var tab in Tabs.Where(t => t.IsDownloadTab))
+            tab.RetryFailedCommand.Execute(null);
+    }
+
+    [RelayCommand]
+    private void SpeedTestSelected()
+    {
+        if (SelectedTab is { IsDownloadTab: true } tab)
+            tab.RunSpeedTestCommand.Execute(null);
+    }
+
+    [RelayCommand]
+    private void SetTheme(string mode) =>
+        ThemeMode = mode switch { "dark" => 1, "light" => 2, _ => 0 };
 
     // ---- IDM-style scheduler ---------------------------------------------------------------------
 

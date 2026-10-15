@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -32,6 +33,10 @@ public sealed class RealWebView : NativeControlHost
     public event Action<string>? InitializationFailed;                  // reason (runtime missing…)
 
     public bool IsReady { get; private set; }
+
+    /// <summary>How many times the engine finished initializing (2+ = re-attached after a tab switch).</summary>
+    public int ReadyCount { get; private set; }
+
     public bool CanGoBack => _core?.CanGoBack ?? false;
     public bool CanGoForward => _core?.CanGoForward ?? false;
     public string? CurrentUrl => IsReady ? _core?.Source : _pendingUrl;
@@ -79,10 +84,14 @@ public sealed class RealWebView : NativeControlHost
         try
         {
             // Throws when the Evergreen runtime is missing (WebView2RuntimeNotFoundException).
+            var options = new CoreWebView2EnvironmentOptions
+            {
+                AreBrowserExtensionsEnabled = true   // uBlock Origin Lite ships as a native browser extension
+            };
             _env = await CoreWebView2Environment.CreateAsync(
                 browserExecutableFolder: null,
                 userDataFolder: UserDataFolder(),
-                options: new CoreWebView2EnvironmentOptions()).ConfigureAwait(true);
+                options: options).ConfigureAwait(true);
 
             _controller = await _env.CreateCoreWebView2ControllerAsync(hwnd).ConfigureAwait(true);
             if (_destroyed)
@@ -141,6 +150,10 @@ public sealed class RealWebView : NativeControlHost
 
             _controller.IsVisible = true;
             IsReady = true;
+            WasEverReady = true;
+            ReadyCount++;
+
+            _ = InstallUBlockLiteAsync();   // fire-and-forget — never blocks first paint
 
             if (!string.IsNullOrWhiteSpace(_pendingUrl))
             {
@@ -154,6 +167,75 @@ public sealed class RealWebView : NativeControlHost
         {
             InitializationFailed?.Invoke(ex.Message);
         }
+    }
+
+    public bool WasEverReady { get; private set; }
+
+    /// <summary>
+    /// Extracts the bundled uBlock Origin Lite (MV3) package to %LOCALAPPDATA% (idempotent,
+    /// version-marked) and loads it into this WebView2 profile as a native browser extension.
+    /// Returns the extension folder, or null when unavailable.
+    /// </summary>
+    private static string? EnsureUBlockLiteExtracted()
+    {
+        try
+        {
+            const string resourceName = "DualNet.App.Assets.Extensions.uBOLite.chromium.zip";
+            using var zipStream = typeof(RealWebView).Assembly.GetManifestResourceStream(resourceName);
+            if (zipStream is null)
+                return null;
+
+            using var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Read);
+            string version = "0";
+            if (archive.GetEntry("manifest.json") is { } manifestEntry)
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(manifestEntry.Open());
+                version = doc.RootElement.TryGetProperty("version", out var v) ? v.GetString() ?? "0" : "0";
+            }
+
+            var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (string.IsNullOrWhiteSpace(baseDir))
+                baseDir = AppContext.BaseDirectory;
+            var root = Path.Combine(baseDir, "DualNet", "Extensions", "uBlockOriginLite");
+            var marker = Path.Combine(root, ".dualnet-version");
+
+            if (Directory.Exists(root) && File.Exists(marker) &&
+                File.ReadAllText(marker).Trim() == version)
+                return root;   // already extracted at this version
+
+            if (Directory.Exists(root))
+                try { Directory.Delete(root, true); } catch { }
+            Directory.CreateDirectory(root);
+            archive.ExtractToDirectory(root, overwriteFiles: true);
+            File.WriteAllText(marker, version);
+            return root;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task InstallUBlockLiteAsync()
+    {
+        try
+        {
+            var folder = EnsureUBlockLiteExtracted();
+            if (folder is null || _core is null || _destroyed)
+                return;
+            await _core.Profile.AddBrowserExtensionAsync(folder).ConfigureAwait(true);
+            SentrySetup.TrackDiagnostic("ublock_extension", "uBlock Origin Lite loaded from " + versionMarker(folder));
+        }
+        catch (Exception ex)
+        {
+            // Ad blocking is an enhancement — an older WebView2 runtime simply runs without it.
+            SentrySetup.TrackDiagnostic("ublock_extension", "not loaded: " + ex.Message);
+        }
+
+        static string versionMarker(string folder) =>
+            File.Exists(Path.Combine(folder, ".dualnet-version"))
+                ? File.ReadAllText(Path.Combine(folder, ".dualnet-version")).Trim()
+                : "?";
     }
 
     public void Navigate(string url)

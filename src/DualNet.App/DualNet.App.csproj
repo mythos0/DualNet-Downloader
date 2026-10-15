@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <Version>1.4.0</Version>
+    <Version>2.0.0</Version>
     <AssemblyName>DualNetDownloader</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
@@ -33,6 +33,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DualNet.Core\DualNet.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- uBlock Origin Lite (MV3, GPLv3) — shipped as a compressed resource and extracted
+         to %LOCALAPPDATA% on first run, then loaded as a native WebView2 browser extension. -->
+    <EmbeddedResource Include="Assets\Extensions\uBOLite.chromium.zip" />
+    <AvaloniaResource Remove="Assets\Extensions\**" />
   </ItemGroup>
 
   <ItemGroup>

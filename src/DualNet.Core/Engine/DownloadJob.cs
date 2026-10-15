@@ -51,8 +51,10 @@ public sealed class DownloadJob : IDisposable
     private bool _filePathClaimed;
     private bool _disposed;
 
-    // Dynamic segment scaling (IDM-style): keeps adding connections while throughput
-    // improves and hands work to adapters that run out of segments.
+    // Dynamic segment scheduling (IDM-style): every connection LOOPS — when it finishes
+    // its piece it immediately claims the tail of the largest remaining piece from ANY
+    // adapter slot, so a fast NIC never sits lazy while slow pieces still crawl. On top
+    // of that the scaler keeps adding connections while throughput improves.
     private int[] _activePerSlot = Array.Empty<int>();        // in-flight workers per adapter slot
     private readonly object _workerGate = new();
     private readonly List<Task> _workers = new();             // includes scaler-spawned workers
@@ -476,7 +478,8 @@ public sealed class DownloadJob : IDisposable
     private async Task RunSegmentedAsync(CancellationToken ct)
     {
         // Spawn one worker per unfinished segment. Each worker writes to its own file
-        // handle and picks its HttpClient from the segment's adapter slot.
+        // handle, picks its HttpClient from the segment's adapter slot, and LOOPS —
+        // claiming the next available piece (from any slot) whenever it finishes one.
         List<SegmentState> initial;
         lock (_sync)
             initial = _segments.Where(s => !s.IsComplete).ToList();
@@ -511,6 +514,8 @@ public sealed class DownloadJob : IDisposable
     /// Starts one connection for a segment on its assigned adapter slot and registers
     /// it with the worker list so <see cref="WaitAllWorkersAsync"/> tracks it. Used both
     /// for the initial plan and by the adaptive scaler when it splits a segment.
+    /// The worker loops: when its segment completes it immediately claims the next
+    /// piece of work — from any adapter slot — until the file is done.
     /// </summary>
     private Task SpawnWorker(SegmentState segment, CancellationToken ct)
     {
@@ -713,128 +718,154 @@ public sealed class DownloadJob : IDisposable
     }
 
     private async Task SegmentWorkerAsync(HttpClient client, int adapterSlot,
-                                          SegmentState segment, CancellationToken ct)
+                                          SegmentState first, CancellationToken ct)
     {
+        SegmentState segment = first;
         int failedAttempts = 0;
         try
         {
-            while (true)
+            while (true)   // ── work loop: finish the current piece, then claim the next one ──
             {
-                ct.ThrowIfCancellationRequested();
-
-                // Re-read End every iteration: the adaptive scaler may shrink this segment
-                // while the worker sleeps/retries, and the worker must honor the new boundary.
-                long segmentLength = segment.End < 0 ? long.MaxValue : segment.End - segment.Start + 1;
-                long done = segment.Written;
-                if (done >= segmentLength)
-                    return;
-
-                long progressedThisAttempt = 0;
-                try
+                bool complete = false;
+                while (!complete)   // ── attempt loop for the current piece ──
                 {
-                    using var request = NewRequest(HttpMethod.Get);
-                    request.Headers.Range = new RangeHeaderValue(segment.Start + done, segment.End);
+                    ct.ThrowIfCancellationRequested();
 
-                    using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    attemptCts.CancelAfter(Options.StallTimeoutMs);
+                    // Re-read End every iteration: the adaptive scaler or another worker's
+                    // claim may shrink this segment while the worker sleeps/retries, and the
+                    // worker must honor the new boundary.
+                    long segmentLength = segment.End < 0 ? long.MaxValue : segment.End - segment.Start + 1;
+                    long done = segment.Written;
+                    if (done >= segmentLength)
+                    {
+                        complete = true;
+                        break;
+                    }
 
-                    using var response = await client
-                        .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token)
-                        .ConfigureAwait(false);
-
-                    if (response.StatusCode == HttpStatusCode.OK)
-                        throw new RangeIgnoredException(
-                            $"Server ignored the range request (HTTP 200 instead of 206); cannot segment.");
-
-                    if (response.StatusCode != HttpStatusCode.PartialContent)
-                        throw new IOException(
-                            $"Unexpected HTTP {(int)response.StatusCode} for a range request.");
-
-                    // A mismatched Content-Range means the server/proxy mangled the request — retriable.
-                    var contentRange = response.Content.Headers.ContentRange;
-                    if (contentRange is { HasRange: true } && contentRange.From != segment.Start + done)
-                        throw new IOException(
-                            $"Server returned mismatched Content-Range (asked {segment.Start + done}, got {contentRange.From}).");
-
-                    await using var stream = await response.Content
-                        .ReadAsStreamAsync(attemptCts.Token).ConfigureAwait(false);
-
-                    await using var fs = new FileStream(
-                        FilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Write,
-                        81920, useAsync: true);
-                    fs.Seek(segment.Start + done, SeekOrigin.Begin);
-
-                    var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(Options.BufferSizeBytes);
+                    long progressedThisAttempt = 0;
                     try
                     {
-                        int read;
-                        while ((read = await stream.ReadAsync(buffer, attemptCts.Token).ConfigureAwait(false)) > 0)
+                        using var request = NewRequest(HttpMethod.Get);
+                        request.Headers.Range = new RangeHeaderValue(segment.Start + done, segment.End);
+
+                        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        attemptCts.CancelAfter(Options.StallTimeoutMs);
+
+                        using var response = await client
+                            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, attemptCts.Token)
+                            .ConfigureAwait(false);
+
+                        if (response.StatusCode == HttpStatusCode.OK)
+                            throw new RangeIgnoredException(
+                                $"Server ignored the range request (HTTP 200 instead of 206); cannot segment.");
+
+                        if (response.StatusCode != HttpStatusCode.PartialContent)
+                            throw new IOException(
+                                $"Unexpected HTTP {(int)response.StatusCode} for a range request.");
+
+                        // A mismatched Content-Range means the server/proxy mangled the request — retriable.
+                        var contentRange = response.Content.Headers.ContentRange;
+                        if (contentRange is { HasRange: true } && contentRange.From != segment.Start + done)
+                            throw new IOException(
+                                $"Server returned mismatched Content-Range (asked {segment.Start + done}, got {contentRange.From}).");
+
+                        await using var stream = await response.Content
+                            .ReadAsStreamAsync(attemptCts.Token).ConfigureAwait(false);
+
+                        await using var fs = new FileStream(
+                            FilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Write,
+                            81920, useAsync: true);
+                        fs.Seek(segment.Start + done, SeekOrigin.Begin);
+
+                        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(Options.BufferSizeBytes);
+                        try
                         {
-                            // The adaptive scaler may shrink this segment mid-flight; stop at the
-                            // new boundary. (A short overlap written twice is byte-identical — safe.)
-                            if (segment.End >= 0 && done >= segment.End - segment.Start + 1)
-                                break;
+                            int read;
+                            while ((read = await stream.ReadAsync(buffer, attemptCts.Token).ConfigureAwait(false)) > 0)
+                            {
+                                // The adaptive scaler or a claiming worker may shrink this segment
+                                // mid-flight; stop at the new boundary. (A short overlap written
+                                // twice is byte-identical — safe.)
+                                if (segment.End >= 0 && done >= segment.End - segment.Start + 1)
+                                    break;
 
-                            // Honor the global speed cap (shared across all jobs/adapters) before writing.
-                            await GlobalSpeedLimit.AcquireAsync(read, ct).ConfigureAwait(false);
-                            attemptCts.CancelAfter(Options.StallTimeoutMs);   // throttling is not a stall
+                                // Honor the global speed cap (shared across all jobs/adapters) before writing.
+                                await GlobalSpeedLimit.AcquireAsync(read, ct).ConfigureAwait(false);
+                                attemptCts.CancelAfter(Options.StallTimeoutMs);   // throttling is not a stall
 
-                            await fs.WriteAsync(buffer.AsMemory(0, read), attemptCts.Token).ConfigureAwait(false);
-                            done += read;
-                            progressedThisAttempt += read;
-                            segment.Written = done;
-                            AccountBytes(adapterSlot, read);
+                                await fs.WriteAsync(buffer.AsMemory(0, read), attemptCts.Token).ConfigureAwait(false);
+                                done += read;
+                                progressedThisAttempt += read;
+                                segment.Written = done;
+                                AccountBytes(adapterSlot, read);
 
-                            if (_pauseRequested)
-                                throw new OperationCanceledException();   // graceful stop
+                                if (_pauseRequested)
+                                    throw new OperationCanceledException();   // graceful stop
 
-                            attemptCts.CancelAfter(Options.StallTimeoutMs);   // reset stall watchdog
+                                attemptCts.CancelAfter(Options.StallTimeoutMs);   // reset stall watchdog
+                            }
                         }
+                        finally
+                        {
+                            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+                        }
+
+                        // Complete when the CURRENT End is satisfied (covers shrink);
+                        // if the connection died before even that, it is an early close — retriable.
+                        long currentLength = segment.End < 0 ? long.MaxValue : segment.End - segment.Start + 1;
+                        if (done >= currentLength)
+                        {
+                            complete = true;
+                            break;   // piece finished
+                        }
+
+                        if (done < segmentLength)
+                            throw new IOException($"Connection closed early ({done}/{segmentLength} bytes).");
+
+                        complete = true;
+                        break;   // piece finished
                     }
-                    finally
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested || _pauseRequested)
                     {
-                        System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+                        throw;    // outer pause/cancel — propagate
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // stall watchdog fired — retriable
+                    }
+                    catch (RangeIgnoredException)
+                    {
+                        throw;    // job-level downgrade — not a per-segment retry
+                    }
+                    catch (Exception ex) when (IsTransient(ex) && !ct.IsCancellationRequested && !_pauseRequested)
+                    {
+                        _lastError = ex;   // transient network error — retriable
                     }
 
-                    // Complete when the CURRENT End is satisfied (covers scaler shrink);
-                    // if the connection died before even that, it is an early close — retriable.
-                    long currentLength = segment.End < 0 ? long.MaxValue : segment.End - segment.Start + 1;
-                    if (done >= currentLength)
-                        return;   // segment complete
+                    if (_pauseRequested)
+                        throw new OperationCanceledException();
 
-                    if (done < segmentLength)
-                        throw new IOException($"Connection closed early ({done}/{segmentLength} bytes).");
+                    if (progressedThisAttempt > 0)
+                        failedAttempts = 0;   // made progress — reset retry budget
 
-                    return;   // segment complete
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested || _pauseRequested)
-                {
-                    throw;    // outer pause/cancel — propagate
-                }
-                catch (OperationCanceledException)
-                {
-                    // stall watchdog fired — retriable
-                }
-                catch (RangeIgnoredException)
-                {
-                    throw;    // job-level downgrade — not a per-segment retry
-                }
-                catch (Exception ex) when (IsTransient(ex) && !ct.IsCancellationRequested && !_pauseRequested)
-                {
-                    _lastError = ex;   // transient network error — retriable
+                    failedAttempts++;
+                    if (failedAttempts > Options.RetryCount)
+                        throw new IOException($"Segment [{segment.Start}..{segment.End}] failed after {Options.RetryCount} retries: {_lastError?.Message ?? "repeated errors"}");
+
+                    await Task.Delay(BackoffDelay(failedAttempts), ct).ConfigureAwait(false);
                 }
 
-                if (_pauseRequested)
-                    throw new OperationCanceledException();
+                // The piece is done. IDM-style work claiming: instead of retiring (and
+                // leaving its NIC lazy), this connection immediately takes the tail of the
+                // largest remaining piece — from ANY adapter slot. A fast NIC that finishes
+                // its share keeps pulling work until the whole file is downloaded.
+                var next = TryClaimWork(adapterSlot);
+                if (next is null)
+                    return;   // nothing left to claim — this connection retires
 
-                if (progressedThisAttempt > 0)
-                    failedAttempts = 0;   // made progress — reset retry budget
-
-                failedAttempts++;
-                if (failedAttempts > Options.RetryCount)
-                    throw new IOException($"Segment [{segment.Start}..{segment.End}] failed after {Options.RetryCount} retries: {_lastError?.Message ?? "repeated errors"}");
-
-                await Task.Delay(BackoffDelay(failedAttempts), ct).ConfigureAwait(false);
+                segment = next;
+                failedAttempts = 0;
+                PersistState();
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -847,6 +878,72 @@ public sealed class DownloadJob : IDisposable
             if (adapterSlot >= 0 && adapterSlot < _activePerSlot.Length)
                 Interlocked.Decrement(ref _activePerSlot[adapterSlot]);
             PersistState();
+        }
+    }
+
+    /// <summary>
+    /// Atomically hands the calling worker fresh work: the tail half of the largest
+    /// remaining piece, whichever adapter slot owns it. The owning worker honors the
+    /// new (shrunk) boundary on its next buffer check — a short overlap written twice
+    /// is byte-identical, so the file stays correct. The claimed piece is re-slotted to
+    /// the claiming NIC so per-adapter accounting and pause/resume stay truthful.
+    /// Returns null when nothing is claimable (all pieces complete, below the minimum
+    /// piece size, piece cap reached, or scaling disabled).
+    /// </summary>
+    private SegmentState? TryClaimWork(int adapterSlot)
+    {
+        if (adapterSlot < 0)
+            return null;
+        if (_pauseRequested || _runCt.IsCancellationRequested)
+            return null;
+        if (!Options.AdaptiveScaling)
+            return null;   // static plan requested — pieces stay on their assigned slot
+
+        lock (_sync)
+        {
+            if (_disposed || !_rangeSupported || _totalSize <= 0)
+                return null;
+
+            SegmentState? best = null;
+            long bestRemaining = 0;
+            foreach (var s in _segments)
+            {
+                if (s.IsComplete)
+                    continue;
+                long head = s.Start + s.Written;               // first byte not yet downloaded
+                long remaining = s.End - head + 1;
+                if (remaining > bestRemaining)
+                {
+                    bestRemaining = remaining;
+                    best = s;
+                }
+            }
+
+            if (best is null ||
+                bestRemaining < 2 * Options.MinSegmentSizeBytes ||
+                _segments.Count >= Options.MaxSegmentsCap)
+                return null;
+
+            int sourceSlot = Math.Clamp(best.Slot ?? 0, 0, Math.Max(0, _clients.Count - 1));
+            long oldEnd = best.End;
+            long half = bestRemaining / 2;
+            best.End = best.Start + best.Written + half - 1;   // owner now stops at the new boundary
+            var tail = new SegmentState
+            {
+                Start = best.Start + best.Written + half,
+                End = oldEnd,
+                Written = 0,
+                Slot = adapterSlot   // the work follows the worker — no fixed NIC division
+            };
+            _segments.Add(tail);
+
+            if (sourceSlot != adapterSlot)
+            {
+                Diagnose("work_claim",
+                    $"NIC {adapterSlot + 1}/{_clients.Count} claimed the tail of a piece from NIC {sourceSlot + 1} " +
+                    $"({tail.End - tail.Start + 1} bytes) — no idle networks while work remains");
+            }
+            return tail;
         }
     }
 

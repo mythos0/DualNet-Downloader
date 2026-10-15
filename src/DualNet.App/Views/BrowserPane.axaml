@@ -19,33 +19,72 @@
       <!-- ============ Real browser engine (Chromium / WebView2) ============ -->
       <ContentControl x:Name="WebHost" IsVisible="{Binding ShowWeb}" />
 
-      <!-- ============ Home / start page ============ -->
-      <StackPanel IsVisible="{Binding ShowHome}" HorizontalAlignment="Center"
-                  Margin="0,44,0,0" Spacing="8" MaxWidth="620">
-        <Border Classes="homeLogo" HorizontalAlignment="Center" Margin="0,0,0,8">
-          <TextBlock Text="⇊" />
-        </Border>
-        <TextBlock Text="DualNet Downloader" FontSize="23" FontWeight="Bold" TextAlignment="Center" />
-        <TextBlock Classes="hint" TextAlignment="Center" TextWrapping="Wrap"
-                   Text="Type a link or a search in the address bar above and press Enter. Pages open in the built-in Chromium browser (Windows + WebView2) or the reader view; when you land on a file, it is split into segments and downloaded over Ethernet + Wi-Fi simultaneously." />
-        <TextBlock Classes="hint" TextAlignment="Center" Margin="0,10,0,2"
-                   IsVisible="{Binding HasRecentUrls}"
-                   Text="Recent pages and files — click to reopen:" />
-        <ItemsControl ItemsSource="{Binding RecentUrls}" IsVisible="{Binding HasRecentUrls}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel HorizontalAlignment="Center" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="x:String">
-              <Button Classes="pill" Content="{Binding}" Margin="3" MaxWidth="280"
-                      Command="{Binding $parent[views:BrowserPane].DataContext.GoCommand}"
-                      CommandParameter="{Binding}" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
+      <!-- ============ Home / start page (Chrome-style NTP) ============ -->
+      <ScrollViewer IsVisible="{Binding ShowHome}" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel HorizontalAlignment="Center" Margin="0,64,0,24" MaxWidth="600">
+          <Border Classes="homeLogo" HorizontalAlignment="Center" Margin="0,0,0,12">
+            <TextBlock Text="⇊" />
+          </Border>
+          <TextBlock Text="DualNet" FontSize="30" FontWeight="Bold" TextAlignment="Center" />
+          <TextBlock Classes="hint" TextAlignment="Center" Margin="0,3,0,20"
+                     Text="Chromium browsing over every network — files download over Ethernet + Wi-Fi together" />
+
+          <Border Classes="omnibox" HorizontalAlignment="Stretch" MaxWidth="560">
+            <TextBox x:Name="NtpSearch" Classes="omniInput"
+                     Watermark="Search or type a URL — Enter opens it on all networks"
+                     KeyDown="OnNtpKeyDown" />
+          </Border>
+
+          <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center" Margin="0,24,0,0">
+            <Button Classes="ntpTile" Command="{Binding GoCommand}" CommandParameter="https://www.google.com">
+              <StackPanel Spacing="4" HorizontalAlignment="Center">
+                <TextBlock Text="G" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"
+                           Foreground="#4285F4" />
+                <TextBlock Text="Google" FontSize="11.5" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="ntpTile" Command="{Binding GoCommand}" CommandParameter="https://www.youtube.com">
+              <StackPanel Spacing="4" HorizontalAlignment="Center">
+                <TextBlock Text="▶" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"
+                           Foreground="#FF0000" />
+                <TextBlock Text="YouTube" FontSize="11.5" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="ntpTile" Command="{Binding GoCommand}" CommandParameter="https://github.com">
+              <StackPanel Spacing="4" HorizontalAlignment="Center">
+                <TextBlock Text="⌥" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"
+                           Foreground="#8B949E" />
+                <TextBlock Text="GitHub" FontSize="11.5" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Classes="ntpTile" Command="{Binding GoCommand}" CommandParameter="https://www.wikipedia.org">
+              <StackPanel Spacing="4" HorizontalAlignment="Center">
+                <TextBlock Text="W" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource DnTextPrimaryBrush}" />
+                <TextBlock Text="Wikipedia" FontSize="11.5" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+
+          <TextBlock Classes="hint" TextAlignment="Center" Margin="0,30,0,2"
+                     IsVisible="{Binding HasRecentUrls}"
+                     Text="Recent pages and files — click to reopen:" />
+          <ItemsControl ItemsSource="{Binding RecentUrls}" IsVisible="{Binding HasRecentUrls}" Margin="0,6,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel HorizontalAlignment="Center" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <Button Classes="pill" Content="{Binding}" Margin="3" MaxWidth="280"
+                        Command="{Binding $parent[views:BrowserPane].DataContext.GoCommand}"
+                        CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
 
       <!-- ============ Error page (reader mode / engine fallback) ============ -->
       <StackPanel IsVisible="{Binding ShowError}" HorizontalAlignment="Center"
