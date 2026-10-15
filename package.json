@@ -1,0 +1,22 @@
+{
+  "name": "dualnet-downloader",
+  "productName": "DualNet Downloader",
+  "version": "3.0.0",
+  "description": "Full Chromium browser (Electron) with a multi-network (NIC) download manager and per-tab proxy support",
+  "main": "src/main/main.js",
+  "author": "mythos0",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node tests/run.js",
+    "dist:win": "electron-builder --win --x64",
+    "dist:linux": "electron-builder --linux --x64"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

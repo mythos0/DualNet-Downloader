@@ -1,0 +1,32 @@
+appId: com.mythos0.dualnet
+productName: DualNet Downloader
+directories:
+  output: release
+  buildResources: build
+files:
+  - src/**/*
+  - package.json
+  - "!**/tests/**"
+  - "!**/scripts/**"
+  - "!**/release/**"
+  - "!**/*.md"
+asar: true
+compression: normal
+win:
+  # sandbox has no wine: skip rcedit (exe keeps default metadata icon);
+  # NSIS installer itself still gets the DualNet icon below
+  signAndEditExecutable: false
+  icon: build/icon.png
+  target:
+    - target: portable
+      arch: [x64]
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  artifactName: DualNetDownloader-Setup-${version}.exe
+portable:
+  artifactName: DualNetDownloader-${version}-portable.exe
