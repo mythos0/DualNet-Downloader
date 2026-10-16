@@ -1,64 +1,105 @@
 # DualNet Downloader
 
-A **full Chromium browser** (Electron) that looks and feels like Chrome, with a **multi-network download manager** built in — and **per-tab proxies** with a live-tested free proxy list.
+**A full Chromium browser (CEF) with a built-in dual-NIC download manager, per-tab proxies, and uBlock Origin preinstalled.**
 
-![DualNet Downloader](https://raw.githubusercontent.com/mythos0/DualNet-Downloader/main/screenshots/v3-light-newtab.png)
+> v4.0.0 — full Chromium engine (CefSharp/CEF 138), real Chrome extension support, DuckDuckGo default search,
+> per-tab proxy **and** per-tab network (NIC) selection beside the proxy icon, online free-proxy finder,
+> and the battle-tested DualNet multi-NIC download engine.
 
-## Why v3 is a rewrite
+![downloads](https://img.shields.io/badge/Windows-10%2F11-blue) ![tests](https://img.shields.io/badge/engine_tests-151%2F151-brightgreen)
 
-v1/v2 were C#/.NET with embedded browser panels (reader-view, then WebView2) — close, but never a *real* browser. v3 switches the tech stack completely:
+## Why v4 is different
 
-| | v1/v2 (.NET + Avalonia) | **v3 (Electron)** |
-|---|---|---|
-| Engine | HTML parser / WebView2 host | **Actual Chromium** (every tab is a full browser) |
-| UI | Avalonia chrome imitation | **Pixel-level Chrome-style shell** (tabs, omnibox, dark mode) |
-| Per-tab proxy | not possible | **Isolated Chromium session per tab + proxy rules** |
-| Free proxies | — | **Fetch from 5 online sources → latency-test → keep working ones** |
-| Web compatibility | partial | **100%** (gradients, video, web apps, logins) |
+v1–v3 used embedded engines that could not run real Chrome extensions and rendered pages through
+foreign surfaces (WebView2 / reader-mode / offscreen shells). v4.0.0 is the real thing:
 
-## Features
+- **Full Chromium** — the actual CEF (Chromium 138) engine: same rendering, same scrolling smoothness,
+  same PDF viewer, same site compatibility as Chrome.
+- **Real extension support** — extensions load through Chromium's own extension system
+  (`--load-extension`), the same mechanism Chrome uses for unpacked extensions.
+  Electron and WebView2 cannot do this.
+- **uBlock Origin preinstalled** — the real extension (MV2 build 1.75.0), plus uBlock Origin Lite
+  (MV3) bundled; toggle them in `dualnet://app/extensions` (menu → Extensions).
+- **DuckDuckGo by default** — the omnibox and the New Tab page search with DuckDuckGo out of the box
+  (Google, Bing, Brave, DDG-Lite selectable in Settings).
 
-### Real Chromium browsing
-- Chrome-identical UI: tab strip with rounded tabs, ＋ new tab, omnibox with lock/search chip, back/forward/reload, downloads button with badge, ⋮ menu, custom window controls, light/dark/system themes
-- Bookmarks bar + star, history page (`dualnet://history`), new-tab shortcuts, Google search from the omnibox or NTP
-- Every tab is an **isolated Chromium session** (own cookies/storage — close a tab, leave nothing behind)
-- `will-download` interception: clicking any download link routes the file straight into the DualNet engine (with the page's cookies/referer/UA preserved)
+## Downloads (NIC) — combined / net1 / net2 / etc.
 
-### Multi-network download manager
-- **Combined / per-NIC selection**: pick *Combined* (all adapters), or a single adapter (`net1`, `net2`, …) per download
-- **Dynamic segment stealing** — the fix for "segments permanently divided between networks": files are split into many 1 MiB+ segments pushed into one global queue; every idle connection grabs the next pending segment. A fast NIC simply claims more segments; nothing sits lazy while the slow one crawls. *(Pinned by integration test `WORK STEALING: fast NIC claims majority of segments`.)*
-- Multi-connection HTTP(S) with redirect following, resume (`.dualnet.json` sidecar meta survives app restarts), pause/resume/cancel/retry, SHA-verified writes, per-NIC live speed chips on every download card
-- Per-download connection slider (2–32), global default in settings
-- Downloads popup (⤓) + full downloads page with filters + crash-recovery resume of unfinished files
+Every download goes through the DualNet engine:
 
-### Per-tab proxy
-- Globe icon in the toolbar → proxy for the **current tab only**
-- **Fetch & test free proxies online**: pulls candidate lists from TheSpeedX, monosans, ProxyScrape, proxy-list.download and geonode (≈900 candidates), validates them concurrently against a generate_204 endpoint and keeps the fastest responding ones with latency + country
-- Or set a custom `host:port` (tested inline before applying)
-- Tabs without a proxy are untouched; downloads always use your real networks
+- Pick **Combined** to bond all networks, or **a single NIC** (Ethernet / Wi-Fi / manual providers) —
+  the selector lives **in the toolbar of every tab, right beside the proxy globe**.
+- The engine keeps a **global segment queue with work stealing**: no NIC is ever "lazy" — the fast one
+  simply claims more segments, and dynamic adaptive scaling keeps adding connections while throughput
+  improves (up to 64 per download).
+- Downloads captured from web pages keep their **cookies / referer / user-agent**, so authenticated
+  links (cloud drives, file hosts) still work.
+- Pause / resume / retry / queue reorder / per-download speed limits / scheduled window /
+  automatic per-category folders / per-download proxy — the professional download-manager checklist.
 
-### Speed test
-- Per-adapter throughput test (Cloudflare payload bound to each NIC) + combined sum
+## Per-tab proxy with free proxies from online
 
-### Crash reporting
-- Built-in Sentry client pointed at the project DSN (`DUALNET_SENTRY_DSN` env override, disable in Settings → Advanced). Verified: events accepted with HTTP 200 at release `dualnet-downloader@3.0.0`.
+Click the **globe icon** in any tab:
+
+1. **Direct** — no proxy.
+2. **Tested free proxies** — DualNet fetches ~1000 candidates from 8 public sources
+   (ProxyScrape, TheSpeedX, monosans, Geonode, …), probes them concurrently, and lists the working
+   ones with measured latency.
+3. **Custom host:port** — with an inline reachability test.
+
+Each tab's proxy is isolated through its own Chromium request context.
+
+## Browser features
+
+- Chrome-style shell: tab strip (pin / mute / duplicate / close others / middle-click close),
+  omnibox with history + bookmark suggestions, bookmarks bar, downloads bubble + full manager,
+  light/dark/system themes.
+- **Session restore** — reopens your tabs after a crash or restart; Ctrl+Shift+T reopens closed tabs.
+- **Private tabs** (Ctrl+Shift+N) — in-memory profile, gone on close.
+- Find-in-page (Ctrl+F), zoom (Ctrl +/−/0), DevTools (F12), screenshots (Ctrl+F3), PDF viewer built in.
+- Bookmarks import/export (Netscape HTML — compatible with Chrome/Firefox exports).
+- Third-party cookie blocking, HTTPS upgrades, safe Chromium defaults.
+- Hardware acceleration on (HwndHost windowed rendering — no offscreen bitmap copying).
 
 ## Keyboard shortcuts
-`Ctrl+T` new tab · `Ctrl+W` close tab · `Ctrl+L` omnibox · `Ctrl+J` downloads · `Ctrl+R`/`F5` reload · `Ctrl+Tab` cycle tabs · `Alt+←/→` history · `F12` devtools
+
+| Keys | Action |
+|------|--------|
+| Ctrl+T / Ctrl+W | New tab / close tab |
+| Ctrl+Shift+N / Ctrl+Shift+T | Private tab / reopen closed tab |
+| Ctrl+L / Ctrl+J | Focus omnibox / downloads |
+| Ctrl+F / Enter / Shift+Enter | Find in page / next / previous match |
+| Ctrl+D / Ctrl+Shift+B | Bookmark page / toggle bookmarks bar |
+| Ctrl+1…9 | Switch to tab |
+| Ctrl+R / F5 | Reload |
+| Ctrl + / − / 0 | Zoom |
+| F12 | DevTools |
+| Ctrl+F3 | Screenshot |
+| Alt+← / Alt+→ | Back / forward |
+
+## Install
+
+1. Unzip `DualNetDownloader-4.0.0-win-x64.zip` anywhere.
+2. Run **`DualNet Downloader/DualNet.App.exe`**.
+3. Optional: the first launch extracts uBlock Origin and starts downloading fresh proxies in the
+   background.
+
+Requirements: Windows 10/11 x64. If the app fails to start, install the
+[Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe).
+
+Settings, cookies (per profile), bookmarks, history, sessions and the proxy cache live in
+`%APPDATA%\DualNet`.
 
 ## Build
 
 ```bash
-npm install
-npm start            # run from source
-npm test             # headless engine test suite (9 tests)
-npm run dist:win     # Windows portable + NSIS installer (x64)
+dotnet test tests/DualNet.Tests/DualNet.Tests.csproj     # 151 engine tests (Linux-friendly)
+dotnet publish src/DualNet.App/DualNet.App.csproj -c Release -r win-x64 --self-contained \
+  -p:EnableWindowsTargeting=true                          # Windows build (cross-builds from Linux)
 ```
 
-## Notes
-- Free public proxies are untrusted — avoid typing passwords while one is active. Dead proxies are filtered by the tester, but reliability changes minute-to-minute.
-- Downloads deliberately bypass tab proxies so both NICs can aggregate; a site that only responds via proxy will need the file link copied into *Add download*.
-- Windows binaries are produced on CI/sandbox without code signing (SmartScreen may warn — click *More info → Run anyway*).
+Projects: `DualNet.Core` (engine + proxy service + stores, net8.0) · `DualNet.App` (WPF + CefSharp shell).
 
 ## License
-MIT — see [LICENSE](LICENSE).
+
+MIT

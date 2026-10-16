@@ -1,4 +1,9 @@
-node_modules/
+bin/
+obj/
 release/
-*.log
-.DS_Store
+publish/
+*.user
+.vs/
+skills/
+node_modules/
+tool-results/

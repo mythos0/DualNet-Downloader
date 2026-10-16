@@ -1,0 +1,39 @@
+<UserControl x:Class="DualNet.App.Views.BookmarksPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Background="{DynamicResource BrushPage}" Margin="24,18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,12">
+            <TextBlock Text="Bookmarks" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource BrushText}"/>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Import HTML…" Padding="12,5" Margin="6,0,0,0" Click="Import_Click"/>
+                <Button Content="Export HTML…" Padding="12,5" Margin="6,0,0,0" Click="Export_Click"/>
+            </StackPanel>
+        </DockPanel>
+        <TextBlock Grid.Row="1" Text="Starred pages (Ctrl+D in the toolbar adds the current tab). Netscape/Chrome/Firefox HTML files can be imported."
+                   FontSize="11" Foreground="{DynamicResource BrushTextDim}" Margin="0,0,0,10"/>
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="BookmarkList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border CornerRadius="6" Padding="10,6" Margin="0,1" Background="{DynamicResource BrushRow}" Cursor="Hand"
+                                MouseUp="Item_Click" ToolTip="{Binding Url}">
+                            <Grid>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="700"/>
+                                    <TextBlock Text="{Binding Url}" FontSize="11" Foreground="{DynamicResource BrushTextDim}" TextTrimming="CharacterEllipsis" MaxWidth="700"/>
+                                </StackPanel>
+                                <Button Content="✕" FontSize="10" Style="{StaticResource IconButton}" HorizontalAlignment="Right"
+                                        Click="Remove_Click"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

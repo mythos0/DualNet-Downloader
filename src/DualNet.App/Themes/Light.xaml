@@ -1,0 +1,30 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Color x:Key="ColorAccent">#1a73e8</Color>
+
+    <SolidColorBrush x:Key="BrushWindow" Color="#dee1e6"/>
+    <SolidColorBrush x:Key="BrushToolbar" Color="#dee1e6"/>
+    <SolidColorBrush x:Key="BrushTabStrip" Color="#cfd4da"/>
+    <SolidColorBrush x:Key="BrushTabActive" Color="#ffffff"/>
+    <SolidColorBrush x:Key="BrushTabHover" Color="#dee1e6"/>
+    <SolidColorBrush x:Key="BrushPage" Color="#ffffff"/>
+    <SolidColorBrush x:Key="BrushOmnibox" Color="#f1f3f4"/>
+    <SolidColorBrush x:Key="BrushOmniboxFocus" Color="#ffffff"/>
+    <SolidColorBrush x:Key="BrushText" Color="#202124"/>
+    <SolidColorBrush x:Key="BrushTextDim" Color="#5f6368"/>
+    <SolidColorBrush x:Key="BrushIcon" Color="#5f6368"/>
+    <SolidColorBrush x:Key="BrushBorder" Color="#dadce0"/>
+    <SolidColorBrush x:Key="BrushHover" Color="#e8eaed"/>
+    <SolidColorBrush x:Key="BrushPressed" Color="#dadce0"/>
+    <SolidColorBrush x:Key="BrushPopup" Color="#ffffff"/>
+    <SolidColorBrush x:Key="BrushAccent" Color="#1a73e8"/>
+    <SolidColorBrush x:Key="BrushAccentSoft" Color="#e8f0fe"/>
+    <SolidColorBrush x:Key="BrushDanger" Color="#d93025"/>
+    <SolidColorBrush x:Key="BrushOk" Color="#188038"/>
+    <SolidColorBrush x:Key="BrushWarn" Color="#e37400"/>
+    <SolidColorBrush x:Key="BrushCard" Color="#ffffff"/>
+    <SolidColorBrush x:Key="BrushField" Color="#ffffff"/>
+    <SolidColorBrush x:Key="BrushRow" Color="#f8f9fa"/>
+    <SolidColorBrush x:Key="BrushShadow" Color="#33000000"/>
+</ResourceDictionary>

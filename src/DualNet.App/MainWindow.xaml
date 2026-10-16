@@ -1,0 +1,408 @@
+<Window x:Class="DualNet.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="DualNet Downloader" Width="1400" Height="900" MinWidth="720" MinHeight="500"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource BrushWindow}"
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+        FontFamily="Segoe UI">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- tab item -->
+        <DataTemplate x:Key="TabItemTemplate">
+            <Border x:Name="TabBg" CornerRadius="8,8,0,0" Padding="10,0" Margin="2,4,0,0"
+                    Background="{DynamicResource BrushTabActive}" MinWidth="120" MaxWidth="220"
+                    Tag="{Binding}" ToolTip="{Binding Url}">
+                <Border.InputBindings>
+                    <MouseBinding Gesture="LeftClick" Command="{Binding DataContext.ActivateTabCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                    <MouseBinding Gesture="MiddleClick" Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                </Border.InputBindings>
+                <Grid Height="34" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                        <TextBlock Text="D" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource BrushAccent}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Image Source="{Binding FaviconUrl}" Width="16" Height="16" HorizontalAlignment="Center"/>
+                    </Grid>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="◐" FontSize="13" Margin="0,0,5,0" Foreground="{DynamicResource BrushAccent}"
+                                   Visibility="{Binding Loading, Converter={StaticResource BoolToVis}}" RenderTransformOrigin="0.5,0.5"/>
+                        <TextBlock Text="👤" FontSize="10" Margin="0,0,4,0" Visibility="{Binding IsPrivate, Converter={StaticResource BoolToVis}}"/>
+                        <TextBlock Text="{Binding DisplayTitle}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <Button Grid.Column="2" Content="✕" FontFamily="Segoe UI" FontSize="10" Style="{StaticResource IconButton}"
+                            Width="18" Height="18" Margin="4,0,0,0"
+                            Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}"
+                            ToolTip="Close tab"/>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                    <Setter TargetName="TabBg" Property="Background" Value="{DynamicResource BrushTabActive}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid x:Name="Root">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="42"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ============ row 0: tab strip + window buttons ============ -->
+        <Border Grid.Row="0" Background="{DynamicResource BrushTabStrip}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <DockPanel LastChildFill="True">
+                <!-- window buttons (right) -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button x:Name="BtnMin" Width="44" Height="32" Content="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                            Background="Transparent" BorderThickness="0" Foreground="{DynamicResource BrushIcon}" Click="BtnMin_Click"/>
+                    <Button x:Name="BtnMax" Width="44" Height="32" Content="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                            Background="Transparent" BorderThickness="0" Foreground="{DynamicResource BrushIcon}" Click="BtnMax_Click"/>
+                    <Button Width="44" Height="32" Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                            Background="Transparent" BorderThickness="0" Foreground="{DynamicResource BrushIcon}" Click="BtnClose_Click"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="8,0,4,0">
+                    <Image Source="/Assets/app.png" Width="16" Height="16" VerticalAlignment="Center"/>
+                </StackPanel>
+                <!-- tabs -->
+                <DockPanel LastChildFill="True" Margin="6,0,0,0">
+                    <Button DockPanel.Dock="Right" x:Name="BtnNewTab" Content="+" FontFamily="Segoe UI" FontSize="16" FontWeight="SemiBold"
+                            Style="{StaticResource ToolButton}" Width="30" Height="30" Margin="2,0,0,0" VerticalAlignment="Center"
+                            Click="BtnNewTab_Click" ToolTip="New tab (Ctrl+T)"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" VerticalAlignment="Center">
+                        <ItemsControl x:Name="TabStrip" ItemsSource="{Binding Tabs}" ItemTemplate="{StaticResource TabItemTemplate}" PreviewMouseRightButtonDown="TabStrip_PreviewMouseRightButtonDown">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ============ row 1: toolbar ============ -->
+        <Border Grid.Row="1" Background="{DynamicResource BrushToolbar}" Padding="6,4" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <Button Style="{StaticResource ToolButton}" Content="&#xE72B;" Click="BtnBack_Click" ToolTip="Back (Alt+←)"/>
+                    <Button Style="{StaticResource ToolButton}" Content="&#xE72A;" Click="BtnForward_Click" ToolTip="Forward (Alt+→)"/>
+                    <Button Style="{StaticResource ToolButton}" Content="&#xE72C;" Click="BtnReload_Click" ToolTip="Reload (Ctrl+R)"/>
+                    <Button Style="{StaticResource ToolButton}" Content="&#xE71A;" Click="BtnHome_Click" ToolTip="New Tab page"/>
+                </StackPanel>
+
+                <!-- omnibox -->
+                <Border Grid.Column="1" Width="560" MinWidth="320" CornerRadius="16" Background="{DynamicResource BrushOmnibox}"
+                        Margin="6,0" Padding="10,0">
+                    <Grid Height="28">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="SecurityIcon" Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                   Foreground="{DynamicResource BrushOk}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                   ToolTip="HTTPS connection"/>
+                        <TextBox x:Name="Omnibox" Grid.Column="1" BorderThickness="0" Background="Transparent"
+                                 Foreground="{DynamicResource BrushText}" FontSize="13" VerticalAlignment="Center"
+                                 KeyDown="Omnibox_KeyDown" GotKeyboardFocus="Omnibox_GotKeyboardFocus" LostKeyboardFocus="Omnibox_LostKeyboardFocus"
+                                 TextChanged="Omnibox_TextChanged" AllowDrop="True" Drop="Omnibox_Drop"/>
+                        <Button Grid.Column="2" x:Name="BtnBookmarkStar" Style="{StaticResource IconButton}" Content="&#xE734;" FontSize="12"
+                                Click="BtnBookmarkStar_Click" ToolTip="Bookmark this page (Ctrl+D)"/>
+                        <Button Grid.Column="3" x:Name="BtnFind" Style="{StaticResource IconButton}" Content="&#xE721;" FontSize="12"
+                                Click="BtnFind_Click" ToolTip="Find in page (Ctrl+F)"/>
+                    </Grid>
+                </Border>
+
+                <!-- right cluster: net selector, proxy, downloads, menu -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal">
+                    <!-- per-tab NET selector (beside the proxy icon, as requested) -->
+                    <Border CornerRadius="4" Background="{DynamicResource BrushHover}" Margin="2,0" Padding="6,0" Height="28">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE839;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{DynamicResource BrushAccent}"
+                                       VerticalAlignment="Center" Margin="0,0,4,0" ToolTip="Download network for this tab"/>
+                            <ComboBox x:Name="NetSelector" Width="120" FontSize="11" Background="Transparent" BorderThickness="0"
+                                      VerticalContentAlignment="Center" SelectionChanged="NetSelector_SelectionChanged"
+                                      ToolTip="Network adapter downloads from this tab use: Combined (dual-NIC) or a single NIC">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Label}" FontSize="11"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+                    <!-- proxy icon -->
+                    <Button x:Name="BtnProxy" Style="{StaticResource ToolButton}" Content="&#xE939;" Click="BtnProxy_Click"
+                            ToolTip="Per-tab proxy: route this tab through a free or custom proxy">
+                        <Button.ContextMenu>
+                            <ContextMenu/>
+                        </Button.ContextMenu>
+                    </Button>
+                    <!-- downloads -->
+                    <Button x:Name="BtnDownloads" Style="{StaticResource ToolButton}" Click="BtnDownloads_Click"
+                            ToolTip="Downloads (Ctrl+J)">
+                        <Grid>
+                            <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="15"/>
+                            <Border x:Name="DownloadBadge" CornerRadius="7" Background="{DynamicResource BrushAccent}" Width="15" Height="15"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-4,0" Visibility="Collapsed">
+                                <TextBlock x:Name="DownloadBadgeText" Text="0" FontSize="9" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                    </Button>
+                    <!-- kebab -->
+                    <Button x:Name="BtnMenu" Style="{StaticResource ToolButton}" Content="&#xE712;" Click="BtnMenu_Click"
+                            ToolTip="Customize and control"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ============ row 2: bookmarks bar ============ -->
+        <Border Grid.Row="2" Background="{DynamicResource BrushToolbar}" Padding="8,2"
+                Visibility="{Binding BookmarksBarVisible, Converter={StaticResource BoolToVis}}">
+            <ItemsControl x:Name="BookmarksBar" ItemsSource="{Binding BookmarksBarItems}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border CornerRadius="4" Padding="8,3" Margin="0,0,4,0" Background="Transparent" MouseUp="BookmarkChip_MouseUp">
+                            <TextBlock Text="{Binding Title}" FontSize="12" Foreground="{DynamicResource BrushText}" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <!-- ============ row 3: page content ============ -->
+        <Grid Grid.Row="3" x:Name="PageHost" Background="{DynamicResource BrushPage}"/>
+
+        <!-- ============ row 4: status bar ============ -->
+        <Border Grid.Row="4" Background="{DynamicResource BrushToolbar}" Padding="8,2">
+            <Grid>
+                <TextBlock x:Name="StatusText" FontSize="11" Foreground="{DynamicResource BrushTextDim}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="ProxyBadge" FontSize="11" Foreground="{DynamicResource BrushWarn}" HorizontalAlignment="Right" Text=""/>
+            </Grid>
+        </Border>
+
+        <!-- ============ overlays (outside rows, absolutely positioned) ============ -->
+        <Popup x:Name="SuggestPopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="{DynamicResource BrushPopup}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                    CornerRadius="8" Width="540" MaxHeight="360" Padding="4" Margin="0,4,0,0">
+                <ListBox x:Name="SuggestList" BorderThickness="0" Background="Transparent" PreviewMouseLeftButtonUp="SuggestList_Click"
+                         KeyDown="SuggestList_KeyDown" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="4">
+                                <TextBlock Text="{Binding Glyph}" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource BrushTextDim}" Width="20"/>
+                                <TextBlock Text="{Binding Primary}" FontWeight="SemiBold" FontSize="13" Margin="4,0,8,0" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
+                                <TextBlock Text="{Binding Secondary}" FontSize="11" Foreground="{DynamicResource BrushTextDim}" TextTrimming="CharacterEllipsis" MaxWidth="80"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+        </Popup>
+
+        <Popup x:Name="FindPopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+            <Border Background="{DynamicResource BrushPopup}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                    CornerRadius="6" Padding="8,6" Margin="0,4,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <TextBox x:Name="FindBox" Width="220" Height="26" FontSize="12" VerticalContentAlignment="Center"
+                             KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
+                    <TextBlock x:Name="FindCount" Margin="8,0" FontSize="12" Foreground="{DynamicResource BrushTextDim}" VerticalAlignment="Center" Text=""/>
+                    <Button Style="{StaticResource IconButton}" Content="&#xE74A;" Click="FindPrev_Click" ToolTip="Previous"/>
+                    <Button Style="{StaticResource IconButton}" Content="&#xE74B;" Click="FindNext_Click" ToolTip="Next"/>
+                    <Button Style="{StaticResource IconButton}" Content="&#xE711;" Click="FindClose_Click" ToolTip="Close"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- downloads bubble -->
+        <Popup x:Name="DownloadsPopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="{DynamicResource BrushPopup}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                    CornerRadius="10" Width="420" MaxHeight="520" Padding="10" Margin="0,6,0,0">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.35"/>
+                </Border.Effect>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- pending download from the page -->
+                        <StackPanel x:Name="PendingDownloadPanel" Visibility="Collapsed">
+                            <TextBlock Text="Download" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource BrushText}"/>
+                            <TextBlock x:Name="PendingFileName" FontSize="12" Foreground="{DynamicResource BrushTextDim}" TextTrimming="CharacterEllipsis" Margin="0,2"/>
+                            <TextBlock x:Name="PendingUrl" FontSize="11" Foreground="{DynamicResource BrushTextDim}" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Network" FontSize="11" Foreground="{DynamicResource BrushTextDim}" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="PendingNetSelector" Grid.Column="1" Height="26" FontSize="12" ItemsSource="{Binding NicChoices}" SelectedIndex="0">
+                                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" FontSize="12"/></DataTemplate></ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                            <Grid Margin="0,2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="Proxy" FontSize="11" Foreground="{DynamicResource BrushTextDim}" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="PendingProxySelector" Grid.Column="1" Height="26" FontSize="12" SelectionChanged="PendingProxy_SelectionChanged"/>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,4">
+                                <Button Content="Save as…" Padding="10,4" Margin="0,0,6,0" Click="PendingSaveAs_Click"/>
+                                <Button Content="Start" Padding="12,4" Background="{DynamicResource BrushAccent}" Foreground="White" Click="PendingStart_Click"/>
+                                <Button Content="Cancel" Padding="10,4" Margin="6,0,0,0" Click="PendingCancel_Click"/>
+                            </StackPanel>
+                            <Separator Margin="0,6"/>
+                        </StackPanel>
+                        <!-- downloads list -->
+                        <Grid>
+                            <TextBlock Text="Downloads" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource BrushText}"/>
+                            <TextBlock Text="Open manager ▸" FontSize="11" Cursor="Hand" Foreground="{DynamicResource BrushAccent}"
+                                       HorizontalAlignment="Right" MouseUp="OpenDownloadsManager_Click"/>
+                        </Grid>
+                        <ItemsControl x:Name="DownloadsMiniList" ItemsSource="{Binding Downloads}" Margin="0,6,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="4,6" CornerRadius="6" Background="{DynamicResource BrushRow}" Margin="0,2">
+                                        <StackPanel>
+                                            <Grid>
+                                                <TextBlock Text="{Binding FileName}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="320"/>
+                                                <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource BrushTextDim}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100" Height="4" Margin="0,4"
+                                                         Background="{DynamicResource BrushHover}" Foreground="{DynamicResource BrushAccent}"/>
+                                            <Grid>
+                                                <TextBlock Text="{Binding SizeText}" FontSize="11" Foreground="{DynamicResource BrushTextDim}"/>
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding EtaText}" FontSize="11" Foreground="{DynamicResource BrushTextDim}" Margin="0,0,8,0"/>
+                                                    <Button Content="⏸" FontSize="10" Style="{StaticResource IconButton}" Command="{Binding DataContext.PauseDownloadCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                    <Button Content="▶" FontSize="10" Style="{StaticResource IconButton}" Command="{Binding DataContext.ResumeDownloadCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                    <Button Content="✕" FontSize="10" Style="{StaticResource IconButton}" Command="{Binding DataContext.CancelDownloadCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                    <Button Content="folder" FontSize="10" Style="{StaticResource IconButton}" Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Popup>
+
+        <!-- proxy bubble -->
+        <Popup x:Name="ProxyPopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="{DynamicResource BrushPopup}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                    CornerRadius="10" Width="430" MaxHeight="540" Padding="10" Margin="0,6,0,0">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.35"/>
+                </Border.Effect>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Proxy for this tab" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource BrushText}"/>
+                        <TextBlock x:Name="ProxyCurrentText" FontSize="11" Foreground="{DynamicResource BrushTextDim}" Margin="0,2,0,6"/>
+                        <Button Content="Direct connection (no proxy)" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Padding="8,5" Click="ProxyDirect_Click"/>
+                        <Separator Margin="0,6"/>
+                        <Grid Margin="0,2">
+                            <TextBlock Text="Free proxies (tested online)" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource BrushText}"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock x:Name="ProxyStatusMini" FontSize="10" Foreground="{DynamicResource BrushTextDim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Button x:Name="BtnProxyRefresh" Content="Refresh" FontSize="11" Padding="8,2" Click="ProxyRefresh_Click"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock x:Name="ProxyHint" FontSize="10" Foreground="{DynamicResource BrushTextDim}" Margin="0,4" Text="None yet — click Refresh to fetch &amp; test free proxies."
+                                   Visibility="Collapsed"/>
+                        <ItemsControl x:Name="ProxyList" Margin="0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,4" Margin="0,1"
+                                            Click="ProxyPick_Click" Tag="{Binding}">
+                                        <Grid>
+                                            <TextBlock FontSize="12">
+                                                <Run Text="{Binding Host, Mode=OneWay}"/><Run Text=":"/><Run Text="{Binding Port, Mode=OneWay}"/>
+                                            </TextBlock>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                <TextBlock Text="{Binding LatencyText}" FontSize="11" Foreground="{DynamicResource BrushOk}" Margin="0,0,8,0"/>
+                                                <TextBlock Text="{Binding Source}" FontSize="10" Foreground="{DynamicResource BrushTextDim}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Separator Margin="0,6"/>
+                        <TextBlock Text="Custom proxy" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource BrushText}"/>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="70"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="CustomProxyHost" Height="26" FontSize="12" VerticalContentAlignment="Center" ToolTip="host or IP"/>
+                            <TextBox x:Name="CustomProxyPort" Grid.Column="1" Height="26" FontSize="12" Margin="6,0" VerticalContentAlignment="Center" ToolTip="port"/>
+                            <Button Grid.Column="2" Content="Test" Padding="8,3" Click="CustomProxyTest_Click"/>
+                            <Button Grid.Column="3" Content="Use" Padding="8,3" Margin="6,0,0,0" Click="CustomProxyUse_Click"/>
+                        </Grid>
+                        <TextBlock x:Name="CustomProxyResult" FontSize="11" Foreground="{DynamicResource BrushTextDim}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Popup>
+
+        <!-- kebab menu -->
+        <Popup x:Name="MenuPopup" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+            <Border Background="{DynamicResource BrushPopup}" BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                    CornerRadius="10" Width="250" Padding="6" Margin="0,6,0,0">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.35"/>
+                </Border.Effect>
+                <StackPanel>
+                    <MenuItem Header="New tab            Ctrl+T" Click="MenuNewTab_Click"/>
+                    <MenuItem Header="New private tab    Ctrl+Shift+N" Click="MenuNewPrivate_Click"/>
+                    <MenuItem Header="Reopen closed tab  Ctrl+Shift+T" Click="MenuReopen_Click"/>
+                    <Separator/>
+                    <MenuItem Header="History" Click="MenuHistory_Click"/>
+                    <MenuItem Header="Bookmarks   Ctrl+Shift+A" Click="MenuBookmarks_Click"/>
+                    <MenuItem Header="Downloads   Ctrl+J" Click="MenuDownloadsPage_Click"/>
+                    <Separator/>
+                    <MenuItem Header="Find in page      Ctrl+F" Click="MenuFind_Click"/>
+                    <MenuItem Header="Zoom in           Ctrl++" Click="MenuZoomIn_Click"/>
+                    <MenuItem Header="Zoom out          Ctrl+-" Click="MenuZoomOut_Click"/>
+                    <MenuItem Header="Reset zoom        Ctrl+0" Click="MenuZoomReset_Click"/>
+                    <MenuItem Header="Take screenshot   Ctrl+F3" Click="MenuScreenshot_Click"/>
+                    <MenuItem Header="Developer tools   F12" Click="MenuDevTools_Click"/>
+                    <Separator/>
+                    <MenuItem Header="Extensions" Click="MenuExtensions_Click"/>
+                    <MenuItem Header="Settings" Click="MenuSettings_Click"/>
+                    <MenuItem Header="About DualNet" Click="MenuAbout_Click"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- tab context menu -->
+        <ContextMenu x:Name="TabContextMenu">
+            <MenuItem Header="Pin tab" Click="TabPin_Click"/>
+            <MenuItem Header="Mute tab" Click="TabMute_Click"/>
+            <MenuItem Header="Duplicate tab" Click="TabDuplicate_Click"/>
+            <Separator/>
+            <MenuItem Header="Close tab        Ctrl+W" Click="TabClose_Click"/>
+            <MenuItem Header="Close other tabs" Click="TabCloseOthers_Click"/>
+        </ContextMenu>
+    </Grid>
+</Window>
