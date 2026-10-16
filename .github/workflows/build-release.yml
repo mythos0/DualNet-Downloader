@@ -67,11 +67,23 @@ jobs:
           $msi = Join-Path $out ("DualNetDownloader-" + $tag.TrimStart("v") + "-setup.msi")
           $zip = Join-Path $out ("DualNetDownloader-" + $tag.TrimStart("v") + "-win-x64.zip")
           $sha = Join-Path $out ("DualNetDownloader-" + $tag.TrimStart("v") + ".sha256")
+          foreach ($f in @($msi, $zip, $sha)) {
+            if (-not (Test-Path $f)) { throw "expected asset missing: $f" }
+          }
+          # Create the release if it does not exist yet (idempotent).
+          gh release view $tag > $null 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --verify-tag `
+              --title "DualNet Downloader $tag" `
+              --notes "Windows build (portable zip + MSI installer). See README for install instructions."
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           gh release upload $tag $msi $zip $sha --clobber
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "assets uploaded to release $tag"
 
       - name: Upload workflow artifact (backup)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DualNet-${{ steps.tag.outputs.version }}
@@ -79,3 +91,4 @@ jobs:
             out/*.msi
             out/*.zip
             out/*.sha256
+            out/DualNet.wxs

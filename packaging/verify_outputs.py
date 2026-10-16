@@ -16,12 +16,30 @@ REQUIRED_ZIP = [
     "PresentationFramework.dll", "WindowsBase.dll", "wpfgfx_cor3.dll", "vcruntime140_cor3.dll",
 ]
 
-# theme resources are compiled INTO the BAML (DualNet.App.g.resources) — check the
-# manifest resource contains both theme dictionary names, which proves Dark.xaml shipped.
+# Theme dictionaries are compiled by WPF into BAML resources stored in
+# DualNet.App.g.resources as "themes/dark.baml" / "themes/light.baml".
+# Two pitfalls the first v4.1.2 gate check tripped over (false negative):
+#   1. a compiled Page item never keeps its .xaml extension -> ".baml"
+#   2. the .g.resources key blob is UTF-16LE, so an ASCII/UTF-8 byte grep
+#      never sees the key at all (the only ASCII hit is a C# string literal).
+# Normalize both encodings, then look for the markers.
+def _norm(data: bytes) -> bytes:
+    parts = [data.lower()]
+    for off in (0, 1):  # both UTF-16LE alignments
+        try:
+            parts.append(data[off:].decode("utf-16-le", errors="ignore")
+                         .lower().encode("utf-8", errors="ignore"))
+        except Exception:
+            pass
+    return b"\n".join(parts)
+
+
 def themes_in_dll(zipf, dll_path):
     with zipf.open(dll_path) as f:
-        data = f.read()
-    return (b"themes/dark.xaml" in data.lower()) and (b"themes/light.xaml" in data.lower())
+        data = _norm(f.read())
+    dark = (b"themes/dark.baml" in data) or (b"themes/dark.xaml" in data)
+    light = (b"themes/light.baml" in data) or (b"themes/light.xaml" in data)
+    return dark and light
 
 
 def main():
@@ -35,11 +53,21 @@ def main():
     print(f"msi: {a.msi} ({os.path.getsize(a.msi):,} bytes)")
 
     with zipfile.ZipFile(a.zip) as z:
+        infos = z.infolist()
+        # Basename of every entry, at any depth — resilient to staging layout.
         names = set()
-        for n in z.namelist():
-            parts = n.split("/")
-            if len(parts) == 2 and parts[1]:
-                names.add(parts[1])
+        for n in infos:
+            base = n.filename.rstrip("/").split("/")[-1]
+            if base:
+                names.add(base)
+        # Canonical layout: every file entry must live under the app folder.
+        bad_layout = [n.filename for n in infos
+                      if not n.filename.endswith("/")
+                      and not n.filename.startswith("DualNet Downloader/")]
+        if bad_layout:
+            print(f"BAD ZIP LAYOUT — {len(bad_layout)} entries outside "
+                  f"'DualNet Downloader/' (first 10): {bad_layout[:10]}")
+            fail = True
         missing = [r for r in REQUIRED_ZIP if r not in names]
         if missing:
             print("MISSING in zip:", missing)

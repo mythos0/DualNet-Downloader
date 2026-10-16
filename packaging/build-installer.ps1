@@ -17,7 +17,6 @@ if (-not $env:UPGRADE_CODE) { $env:UPGRADE_CODE = "{9C7B7F3A-52D4-4E62-A8F1-D6B4
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $pub      = Join-Path $repoRoot "out\publish"
 $out      = Join-Path $repoRoot "out"
-$stage    = Join-Path $repoRoot "out\stage"
 
 Write-Host "== test =="
 # CI runners are slow/noisy: skip the 3 timing-sensitive localhost-timing tests there.
@@ -50,8 +49,12 @@ if (-not $ijw) {
   $ijw = Get-ChildItem $hpDir -Recurse -Filter ijwhost.dll | Select-Object -First 1
 }
 if (-not $ijw) { throw "ijwhost.dll not found anywhere" }
-Copy-Item $ijw.FullName (Join-Path $pub "ijwhost.dll")
-Write-Host "bundled: $($ijw.FullName)"
+$ijwDest = Join-Path $pub "ijwhost.dll"
+Copy-Item $ijw.FullName $ijwDest -Force
+# Hard verify: the copy MUST land in the publish dir (v4.1.2 taught us this file
+# is life-or-death for CefSharp startup — never trust a silent copy).
+if (-not (Test-Path $ijwDest) -or (Get-Item $ijwDest).Length -le 0) { throw "ijwhost.dll copy failed -> $ijwDest" }
+Write-Host "bundled: $($ijw.FullName) -> $ijwDest ($((Get-Item $ijwDest).Length) bytes)"
 
 Write-Host "== bundle VC++ runtime DLLs =="
 $appx = Join-Path $env:TEMP "Microsoft.VCLibs.x64.14.00.Desktop.appx"
@@ -64,21 +67,27 @@ Expand-Archive -Path $zip -DestinationPath (Join-Path $env:TEMP "vclibs") -Force
 foreach ($d in $want) {
   $src = Get-ChildItem (Join-Path $env:TEMP "vclibs") -Recurse -Filter $d | Select-Object -First 1
   if (-not $src) { throw "VC runtime dll missing in appx: $d" }
-  Copy-Item $src.FullName (Join-Path $pub $d) -Force
+  $dst = Join-Path $pub $d
+  Copy-Item $src.FullName $dst -Force
+  if (-not (Test-Path $dst) -or (Get-Item $dst).Length -le 0) { throw "VC runtime copy failed: $dst" }
 }
-Write-Host "bundled $($want.Count)/$($want.Count) VC runtime DLLs"
+Write-Host "bundled $($want.Count)/$($want.Count) VC runtime DLLs (verified present in publish dir)"
 
 Write-Host "== strip PDBs =="
 Get-ChildItem $pub -Filter *.pdb | Remove-Item -Force
 
-Write-Host "== portable zip =="
-if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
-New-Item -ItemType Directory -Path $stage | Out-Null
-Copy-Item -Recurse -Force $pub (Join-Path $stage "DualNet Downloader")
+$pubFiles = @(Get-ChildItem $pub -Recurse -File)
+Write-Host "publish dir ready: $($pubFiles.Count) files, $([math]::Round(($pubFiles | Measure-Object Length -Sum).Sum / 1MB, 1)) MB"
+# Belt-and-braces: the 8 manually bundled files MUST all be present right now.
+foreach ($must in (@("ijwhost.dll") + $want)) {
+  if (-not (Test-Path (Join-Path $pub $must))) { throw "$must missing from publish dir before packaging" }
+}
+
+Write-Host "== portable zip (deterministic python builder — Compress-Archive silently dropped ijwhost.dll on CI in 4.1.2) =="
 $zipOut = Join-Path $out "DualNetDownloader-$Version-win-x64.zip"
 if (Test-Path $zipOut) { Remove-Item -Force $zipOut }
-Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zipOut
-Remove-Item -Recurse -Force $stage
+python (Join-Path $repoRoot "packaging\make_zip.py") --pub $pub --out $zipOut
+if ($LASTEXITCODE -ne 0) { throw "zip build failed" }
 
 Write-Host "== WiX v6 =="
 dotnet tool install --global wix --version 6.0.2 2>$null; dotnet tool update --global wix --version 6.0.2 | Out-Null
@@ -110,6 +119,10 @@ python (Join-Path $repoRoot "packaging\gen_wxs.py") `
 $msi = Join-Path $out "DualNetDownloader-$Version-setup.msi"
 wix build -arch x64 -ext $extDll.FullName (Join-Path $out "DualNet.wxs") -o $msi
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $msi)) { throw "wix build failed" }
+
+Write-Host "== verify MSI contents (File table vs publish dir) =="
+& (Join-Path $repoRoot "packaging\verify_msi.ps1") -Msi $msi -PubDir $pub
+if ($LASTEXITCODE -ne 0) { throw "MSI content verification failed" }
 
 Write-Host "== sha256 =="
 $shaFile = Join-Path $out "DualNetDownloader-$Version.sha256"

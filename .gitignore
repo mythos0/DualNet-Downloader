@@ -7,3 +7,4 @@ publish/
 skills/
 node_modules/
 tool-results/
+__pycache__/
