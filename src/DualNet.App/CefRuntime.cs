@@ -222,7 +222,7 @@ public static class CefRuntime
 
         // Real browser UA (strip the CefSharp marker so sites treat it as Chrome).
         settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                             "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 DualNet/4.1.1";
+                             "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 DualNet/4.1.2";
 
         // Full extension support through Chromium's own loader.
         var extDirs = ExtensionManager.EnabledExtensionDirs();

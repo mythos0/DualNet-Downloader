@@ -22,6 +22,10 @@ public partial class MainWindow : Window
     private readonly MainViewModel _vm;
     private readonly Dictionary<int, FrameworkElement> _tabViews = new();
     private TabViewModel? _contextTab;
+
+    // v4.1.2: the tab context menu lives in Window.Resources (a ContextMenu can never be a
+    // layout child — see MainWindow.xaml comment). Resolved lazily, never throws.
+    private ContextMenu? TabContextMenu => TryFindResource("TabContextMenu") as ContextMenu;
     private System.IntPtr _hwnd;
     private HwndSource? _hwndSource;
 
@@ -355,8 +359,12 @@ public partial class MainWindow : Window
             if (item?.Content is TabViewModel tab)
             {
                 _contextTab = tab;
-                TabContextMenu.PlacementTarget = TabStrip;
-                TabContextMenu.IsOpen = true;
+                var menu = TabContextMenu;
+                if (menu is not null)
+                {
+                    menu.PlacementTarget = TabStrip;
+                    menu.IsOpen = true;
+                }
                 e.Handled = true;
             }
         }

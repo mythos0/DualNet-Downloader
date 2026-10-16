@@ -17,7 +17,7 @@ namespace DualNet.App.Browser;
 public sealed class CefTabHost : IDisposable
 {
     public const string BrowserUserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 DualNet/4.1.1";
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 DualNet/4.1.2";
 
     private readonly TabViewModel _tab;
     private readonly MainViewModel _main;

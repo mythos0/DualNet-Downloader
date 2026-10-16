@@ -1,0 +1,79 @@
+name: build-release
+
+# Builds the Windows portable zip + MSI installer and attaches them to the release
+# for the given tag. Trigger on tag push (v*) or manually with a tag name.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v4.1.2) — must already exist"
+        required: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      WIX_DOLLARDOLLAR: "$"
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "version=$("${{ inputs.tag }}")" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          } else {
+            "version=$("${{ github.ref_name }}")" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.version }}
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build zip + MSI (tests included)
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          $v = $env:VERSION.TrimStart("v")
+          & (Join-Path $PWD "packaging\build-installer.ps1") -Version $v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Attach assets to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.version }}
+        run: |
+          $tag = $env:TAG
+          $out = Join-Path $PWD "out"
+          $msi = Join-Path $out ("DualNetDownloader-" + $tag.TrimStart("v") + "-setup.msi")
+          $zip = Join-Path $out ("DualNetDownloader-" + $tag.TrimStart("v") + "-win-x64.zip")
+          $sha = Join-Path $out ("DualNetDownloader-" + $tag.TrimStart("v") + ".sha256")
+          gh release upload $tag $msi $zip $sha --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "assets uploaded to release $tag"
+
+      - name: Upload workflow artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DualNet-${{ steps.tag.outputs.version }}
+          path: |
+            out/*.msi
+            out/*.zip
+            out/*.sha256

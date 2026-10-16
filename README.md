@@ -102,11 +102,21 @@ Each tab's proxy is isolated through its own Chromium request context.
 
 ## Install
 
-1. Unzip `DualNetDownloader-4.1.1-win-x64.zip` into a folder (extract the WHOLE zip —
+### Recommended: MSI installer (v4.1.2+)
+
+1. Download and run **`DualNetDownloader-4.1.2-setup.msi`**.
+2. Follow the wizard (installs per-user to `%LOCALAPPDATA%\Programs\DualNet Downloader` —
+   no admin rights needed, Start Menu + Desktop shortcuts created automatically).
+3. **Updating:** future versions install straight over the old one — the MSI
+   supersedes the previous install automatically; no uninstall needed.
+
+### Portable zip
+
+1. Unzip `DualNetDownloader-4.1.2-win-x64.zip` into a folder (extract the WHOLE zip —
    don't run the exe from inside the zip viewer).
 2. Run **`DualNet Downloader/DualNet.App.exe`**.
-3. Optional: the first launch extracts uBlock Origin and starts downloading fresh proxies in the
-   background.
+
+First launch extracts uBlock Origin and starts downloading fresh proxies in the background.
 
 Requirements: Windows 10/11 x64. All runtime dependencies (including the VC++ runtime and
 .NET 8) are bundled — no installer or extra download is needed.
@@ -116,7 +126,10 @@ Requirements: Windows 10/11 x64. All runtime dependencies (including the VC++ ru
 - **What was broken before v4.1.1:** the release zip was missing `ijwhost.dll` and the
   VC++ runtime DLLs, and the dark-theme resource file was missing entirely — so on most
   machines (Windows dark mode) the app died silently before any window appeared. v4.1.1
-  bundles every missing file and no longer fails silently.
+  bundles every missing file and no longer fails silently. **v4.1.2 additionally fixed a
+  crash in the main window XAML (a context menu declared as a layout child) that hit
+  every user at launch** — with a proper error dialog + `%APPDATA%\DualNet\logs` report
+  when anything does go wrong.
 - If a startup error dialog appears, it names the exact problem and saves a full report to
   `%APPDATA%\DualNet\logs\crash-*.log` — include that file when reporting an issue.
 - If Windows SmartScreen shows "Windows protected your PC" for the downloaded exe, click

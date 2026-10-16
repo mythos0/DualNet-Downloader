@@ -10,7 +10,30 @@
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
     </shell:WindowChrome.WindowChrome>
 
+    <!--
+      v4.1.2 crash fix: this ContextMenu used to sit as a DIRECT child of the root Grid.
+      WPF tries to add it to Grid.Children (UIElementCollection) and ContextMenu may not
+      have a visual/logical parent -> XamlParseException in InitializeComponent => the app
+      crashed on launch for every user ("the app is not opening"). Declared as a window
+      resource now (context menus must never be layout children) and resolved in code.
+    -->
     <Window.Resources>
+        <!--
+          v4.1.2 crash fix: this ContextMenu used to sit as a DIRECT child of the root Grid.
+          WPF tries to add it to Grid.Children (UIElementCollection) and a ContextMenu may
+          not have a visual/logical parent -> XamlParseException in InitializeComponent =>
+          the app crashed on launch for every user ("the app is not opening"). Context menus
+          must live in resources and be opened from code.
+        -->
+        <ContextMenu x:Key="TabContextMenu">
+            <MenuItem Header="Pin tab" Click="TabPin_Click"/>
+            <MenuItem Header="Mute tab" Click="TabMute_Click"/>
+            <MenuItem Header="Duplicate tab" Click="TabDuplicate_Click"/>
+            <Separator/>
+            <MenuItem Header="Close tab        Ctrl+W" Click="TabClose_Click"/>
+            <MenuItem Header="Close other tabs" Click="TabCloseOthers_Click"/>
+        </ContextMenu>
+
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- tab item -->
         <DataTemplate x:Key="TabItemTemplate">
@@ -399,15 +422,5 @@
                 </StackPanel>
             </Border>
         </Popup>
-
-        <!-- tab context menu -->
-        <ContextMenu x:Name="TabContextMenu">
-            <MenuItem Header="Pin tab" Click="TabPin_Click"/>
-            <MenuItem Header="Mute tab" Click="TabMute_Click"/>
-            <MenuItem Header="Duplicate tab" Click="TabDuplicate_Click"/>
-            <Separator/>
-            <MenuItem Header="Close tab        Ctrl+W" Click="TabClose_Click"/>
-            <MenuItem Header="Close other tabs" Click="TabCloseOthers_Click"/>
-        </ContextMenu>
     </Grid>
 </Window>

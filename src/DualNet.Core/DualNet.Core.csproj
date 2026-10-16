@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <Version>4.1.1</Version>
+    <Version>4.1.2</Version>
     <Description>Dual-network (Ethernet + Wi-Fi) high speed download engine</Description>
   </PropertyGroup>
 
