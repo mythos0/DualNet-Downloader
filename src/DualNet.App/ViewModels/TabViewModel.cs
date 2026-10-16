@@ -13,6 +13,10 @@ public sealed class TabViewModel : INotifyPropertyChanged
     /// <summary>dualnet://app/&lt;page&gt; when Kind == Internal ("newtab", "downloads", …).</summary>
     public string InternalPage { get; set; } = "newtab";
 
+    /// <summary>v4.1.1 — populated when the Chromium engine could not be created for this tab
+    /// (shown on the engine-error internal page instead of failing silently).</summary>
+    public string EngineError { get; set; } = "";
+
     private string _title = "New Tab";
     public string Title { get => _title; set { _title = value; Changed(nameof(Title)); Changed(nameof(DisplayTitle)); } }
 
@@ -42,6 +46,7 @@ public sealed class TabViewModel : INotifyPropertyChanged
                     "extensions" => "Extensions",
                     "agent" => "AI Agent",
                     "about" => "About",
+                    "engine-error" => "Browser engine unavailable",
                     _ => InternalPage,
                 };
             }

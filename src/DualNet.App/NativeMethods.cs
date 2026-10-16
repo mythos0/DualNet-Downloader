@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -57,5 +58,27 @@ internal static class NativeMethods
             }
         }
         catch { }
+    }
+
+    /// <summary>
+    /// True when the Windows loader can find and load the given native DLL (app directory,
+    /// System32/PATH). Used by the CEF preflight so a missing VC++ runtime produces a clear
+    /// error instead of a silent crash. Always true on non-Windows (unit-test friendliness).
+    /// </summary>
+    public static bool CanLoadNativeLibrary(string fileName)
+    {
+        if (!OperatingSystem.IsWindows()) return true;
+        try
+        {
+            // First check the app dir explicitly (LoadLibrary default search includes it,
+            // but be explicit), then fall back to the default search path.
+            var local = Path.Combine(AppContext.BaseDirectory, fileName);
+            if (File.Exists(local)) return true;
+            return NativeLibrary.TryLoad(fileName, out _);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

@@ -302,8 +302,42 @@ public partial class MainWindow : Window
             "extensions" => new Views.ExtensionsPage { DataContext = _vm },
             "agent" => CreateAgentPage(),
             "about" => new Views.AboutPage { DataContext = _vm },
+            "engine-error" => BuildEngineErrorPage(tab),
             _ => new Views.NewTabPage { DataContext = _vm },
         };
+    }
+
+    /// <summary>v4.1.1 — shown when the Chromium engine cannot be created for a tab, so the
+    /// failure is visible (with its reason) instead of a blank tab and a silent exception.</summary>
+    private FrameworkElement BuildEngineErrorPage(TabViewModel tab)
+    {
+        var panel = new StackPanel { Margin = new Thickness(40) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "The browser engine could not be started for this tab",
+            FontSize = 20,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("BrushText"),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = tab.EngineError.Length > 0 ? tab.EngineError : "Unknown error.",
+            Margin = new Thickness(0, 14, 0, 0),
+            FontSize = 13,
+            Foreground = (Brush)FindResource("BrushTextDim"),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Re-extract the full DualNet zip into one folder and restart the app. " +
+                   "Details are saved in %APPDATA%\\DualNet\\logs.",
+            Margin = new Thickness(0, 14, 0, 0),
+            FontSize = 13,
+            Foreground = (Brush)FindResource("BrushTextDim"),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        return new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     }
 
     private void NetSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)

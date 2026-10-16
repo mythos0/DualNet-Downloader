@@ -139,6 +139,77 @@ public static class CefRuntime
 
     public static bool IsInitialized => _initialized;
 
+    /// <summary>Files that MUST sit next to DualNet.App.exe for the Chromium engine to load.
+    /// v4.1.1: the release zip previously missed ijwhost.dll (required to load ANY C++/CLI
+    /// mixed-mode assembly on .NET) and the VC++ runtime DLLs — the app then failed silently
+    /// before any window appeared. These are now bundled with the build and verified here.</summary>
+    public static readonly string[] RequiredNativeFiles =
+    {
+        "libcef.dll", "CefSharp.Core.Runtime.dll", "CefSharp.BrowserSubprocess.exe",
+        "ijwhost.dll", "resources.pak", "icudtl.dat", "v8_context_snapshot.bin",
+    };
+
+    /// <summary>Windows loader DLLs imported by CefSharp.Core.Runtime.dll. App-local copies are
+    /// shipped; if absent they are usually found system-wide (VC++ 2015-2022 redistributable).</summary>
+    public static readonly string[] CppRuntimeDlls =
+    {
+        "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll",
+    };
+
+    /// <summary>
+    /// Verifies every native dependency the Chromium engine needs can actually load BEFORE
+    /// we touch CefSharp types — turning a previously silent failure into a clear, actionable
+    /// error. Returns a list of human-readable problems (empty = all good).
+    /// </summary>
+    public static List<string> PreflightCheck()
+    {
+        var problems = new List<string>();
+        var baseDir = AppContext.BaseDirectory;
+
+        foreach (var file in RequiredNativeFiles)
+        {
+            if (!File.Exists(Path.Combine(baseDir, file)))
+                problems.Add($"Missing required file: {file} (must be in the same folder as DualNet.App.exe)");
+        }
+
+        foreach (var dll in CppRuntimeDlls)
+        {
+            if (File.Exists(Path.Combine(baseDir, dll))) continue;   // bundled copy
+            // Not bundled — the Windows loader must find it in PATH / System32 (VC++ redist).
+            if (!NativeMethods.CanLoadNativeLibrary(dll))
+                problems.Add($"{dll} not found — install the Microsoft Visual C++ 2015-2022 " +
+                             "Redistributable (x64) from https://aka.ms/vs/17/release/vc_redist.x64.exe");
+        }
+
+        if (problems.Count == 0 && !NativeMethods.CanLoadNativeLibrary("CefSharp.Core.Runtime.dll"))
+            problems.Add("CefSharp.Core.Runtime.dll failed to load (a dependency is missing or blocked). " +
+                         "Re-extract the full zip and make sure the exe is not blocked by Windows " +
+                         "(right-click zip → Properties → Unblock before extracting).");
+
+        return problems;
+    }
+
+    /// <summary>
+    /// One-shot safe bootstrap used at startup: preflight + Initialize. Throws an exception
+    /// whose message is user-facing (the caller shows it in a dialog and logs it).
+    /// </summary>
+    public static void EnsureInitialized()
+    {
+        if (_initialized) return;
+        var problems = PreflightCheck();
+        if (problems.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "The Chromium browser engine could not be loaded:\n\n" +
+                string.Join("\n", problems.Select(p => " • " + p)) +
+                "\n\nHow to fix:\n" +
+                " 1. Extract the FULL DualNet zip into a folder (don't run the exe from inside the zip).\n" +
+                " 2. If Windows flagged the download: right-click the zip → Properties → Unblock → OK, then extract again.\n" +
+                " 3. If the problem persists, install the Visual C++ Redistributable (x64): https://aka.ms/vs/17/release/vc_redist.x64.exe");
+        }
+        Initialize();
+    }
+
     public static void Initialize()
     {
         if (_initialized) return;
@@ -151,7 +222,7 @@ public static class CefRuntime
 
         // Real browser UA (strip the CefSharp marker so sites treat it as Chrome).
         settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                             "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 DualNet/4.0";
+                             "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 DualNet/4.1.1";
 
         // Full extension support through Chromium's own loader.
         var extDirs = ExtensionManager.EnabledExtensionDirs();

@@ -25,15 +25,43 @@ public partial class App : Application
             return;
         }
 
+        // v4.1.1 startup crash guard: a failure before the main window exists previously
+        // vanished (exception swallowed below, no window, no message — "the app is not
+        // opening"). Now: log to %APPDATA%\DualNet\logs + show a real error dialog.
+        try
+        {
+            StartupCore(e);
+        }
+        catch (Exception ex)
+        {
+            FatalStartupError("startup", ex);
+        }
+    }
+
+    private void StartupCore(StartupEventArgs e)
+    {
         DispatcherUnhandledException += (_, args) =>
         {
+            var log = CrashLog.Write("wpf.dispatcher.unhandled", args.Exception);
             SentrySetup.CaptureException(args.Exception, "wpf.dispatcher.unhandled");
+            if (MainWindow2 is null)
+            {
+                // The main window never appeared — without this dialog the app would look
+                // like it "did not open". Report loudly and exit.
+                args.Handled = false;
+                ShowFatalDialog(args.Exception, log);
+                Environment.Exit(1);
+                return;
+            }
             args.Handled = true;    // a download manager must survive UI hiccups
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception ex)
+            {
+                CrashLog.Write("appdomain.unhandled", ex);
                 SentrySetup.CaptureException(ex, "appdomain.unhandled");
+            }
             SentrySetup.FlushSync();
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
@@ -44,6 +72,24 @@ public partial class App : Application
 
         AppBootstrapper.Initialize(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DualNet"));
+        CrashLog.Note($"Starting DualNet {Assembly.GetEntryAssembly()?.GetName().Version} " +
+                      $"from {AppContext.BaseDirectory}");
+
+        // Initialize the Chromium engine BEFORE the first tab exists. This was previously
+        // never called at all (v4.0.0/v4.1.0) — the first browser tab crashed with
+        // "Cef is not initialized" and the failure was swallowed before any window showed.
+        try
+        {
+            CefRuntime.EnsureInitialized();
+        }
+        catch (Exception ex)
+        {
+            var log = CrashLog.Write("cef.initialize", ex);
+            SentrySetup.CaptureException(ex, "cef.initialize");
+            ShowFatalDialog(ex, log);
+            Environment.Exit(1);
+            return;
+        }
 
         ApplyTheme(AppBootstrapper.Settings.ThemeMode);
         SentrySetup.HookDispatcher(ex => SentrySetup.CaptureException(ex, "ui.unhandled"));
@@ -64,6 +110,35 @@ public partial class App : Application
 
         SentrySetup.TrackAppStart();
         base.OnStartup(e);
+    }
+
+    private static void ShowFatalDialog(Exception ex, string logPath)
+    {
+        try
+        {
+            var details = ex.Message;
+            var hint = string.IsNullOrEmpty(logPath)
+                ? ""
+                : $"\n\nA detailed error report was saved to:\n{logPath}";
+            MessageBox.Show(
+                $"DualNet Downloader failed to start.\n\n{details}{hint}",
+                "DualNet Downloader — startup error",
+                MessageBoxButton.OK, MessageBoxImage.Error,
+                MessageBoxResult.OK, MessageBoxOptions.DefaultDesktopOnly);
+        }
+        catch
+        {
+            // Even MessageBox can fail in a poisoned process — do not mask the original error.
+        }
+    }
+
+    private static void FatalStartupError(string source, Exception ex)
+    {
+        try { SentrySetup.CaptureException(ex, source); } catch { }
+        var log = CrashLog.Write(source, ex);
+        ShowFatalDialog(ex, log);
+        try { Environment.Exit(1); } catch { }
+        try { Application.Current?.Shutdown(1); } catch { }
     }
 
     public MainWindow? MainWindow2 { get; private set; }
@@ -96,9 +171,25 @@ public partial class App : Application
             _ => IsSystemDark(),
         };
         var uri = new Uri($"Themes/{(dark ? "Dark" : "Light")}.xaml", UriKind.Relative);
-        var dict = new ResourceDictionary { Source = uri };
-        Resources.MergedDictionaries.Clear();
-        Resources.MergedDictionaries.Add(dict);
+        try
+        {
+            var dict = new ResourceDictionary { Source = uri };
+            Resources.MergedDictionaries.Clear();
+            Resources.MergedDictionaries.Add(dict);
+        }
+        catch (Exception ex)
+        {
+            // v4.1.1 hardening: a missing/broken theme dictionary must never kill startup
+            // (the missing Dark.xaml did exactly that in v4.0.0–v4.1.0). Fall back to Light.
+            CrashLog.Write($"apply-theme:{mode}", ex);
+            try
+            {
+                var light = new ResourceDictionary { Source = new Uri("Themes/Light.xaml", UriKind.Relative) };
+                Resources.MergedDictionaries.Clear();
+                Resources.MergedDictionaries.Add(light);
+            }
+            catch { }
+        }
     }
 
     public void RefreshSystemTheme()

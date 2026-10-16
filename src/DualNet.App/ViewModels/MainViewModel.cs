@@ -293,7 +293,27 @@ public sealed class MainViewModel : INotifyPropertyChanged
             tab.Host.Browser.LoadUrl(url);
             return;
         }
-        var host = new CefTabHost(tab, this, url);
+        CefTabHost host;
+        try
+        {
+            host = new CefTabHost(tab, this, url);
+        }
+        catch (Exception ex)
+        {
+            // v4.1.1: a broken/missing browser engine used to throw invisibly (the tab then
+            // stayed blank forever). Show the reason on the tab itself instead.
+            CrashLog.Write("tab.browser-create", ex);
+            DualNet.Core.SentrySetup.CaptureException(ex, "tab.browser-create");
+            tab.Kind = TabContentKind.Internal;
+            tab.InternalPage = "engine-error";
+            tab.Url = "dualnet://app/engine-error";
+            tab.Title = "Browser engine unavailable";
+            tab.EngineError = ex.Message;
+            tab.RefreshDisplay();
+            tab.InternalView ??= InternalPageFactory(tab);
+            TabsChanged?.Invoke();
+            return;
+        }
         tab.Host = host;
         if (tab.Proxy is { Length: > 0 } proxy)
         {

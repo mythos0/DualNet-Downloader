@@ -1,0 +1,39 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      Dark theme — v4.1.1.
+      CRITICAL FIX: this file was never committed to git (it existed only in the original
+      build tree), so every dark-mode user got "Cannot locate resource themes/dark.xaml"
+      at startup — swallowed by the old exception handler, leaving the app to fail
+      silently with no window ("the app is not opening"). Committed now, and ApplyTheme
+      additionally falls back to Light if a theme dictionary is ever missing again.
+    -->
+
+    <Color x:Key="ColorAccent">#8ab4f8</Color>
+
+    <SolidColorBrush x:Key="BrushWindow" Color="#202124"/>
+    <SolidColorBrush x:Key="BrushToolbar" Color="#35363a"/>
+    <SolidColorBrush x:Key="BrushTabStrip" Color="#292a2d"/>
+    <SolidColorBrush x:Key="BrushTabActive" Color="#3c3d41"/>
+    <SolidColorBrush x:Key="BrushTabHover" Color="#2f3033"/>
+    <SolidColorBrush x:Key="BrushPage" Color="#202124"/>
+    <SolidColorBrush x:Key="BrushOmnibox" Color="#292a2d"/>
+    <SolidColorBrush x:Key="BrushOmniboxFocus" Color="#3c3d41"/>
+    <SolidColorBrush x:Key="BrushText" Color="#e8eaed"/>
+    <SolidColorBrush x:Key="BrushTextDim" Color="#9aa0a6"/>
+    <SolidColorBrush x:Key="BrushIcon" Color="#9aa0a6"/>
+    <SolidColorBrush x:Key="BrushBorder" Color="#3f4043"/>
+    <SolidColorBrush x:Key="BrushHover" Color="#3c3d41"/>
+    <SolidColorBrush x:Key="BrushPressed" Color="#4a4b4f"/>
+    <SolidColorBrush x:Key="BrushPopup" Color="#292a2d"/>
+    <SolidColorBrush x:Key="BrushAccent" Color="#8ab4f8"/>
+    <SolidColorBrush x:Key="BrushAccentSoft" Color="#1f3348"/>
+    <SolidColorBrush x:Key="BrushDanger" Color="#f28b82"/>
+    <SolidColorBrush x:Key="BrushOk" Color="#81c995"/>
+    <SolidColorBrush x:Key="BrushWarn" Color="#fdd663"/>
+    <SolidColorBrush x:Key="BrushCard" Color="#292a2d"/>
+    <SolidColorBrush x:Key="BrushField" Color="#303134"/>
+    <SolidColorBrush x:Key="BrushRow" Color="#292a2d"/>
+    <SolidColorBrush x:Key="BrushShadow" Color="#66000000"/>
+</ResourceDictionary>

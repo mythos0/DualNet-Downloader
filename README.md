@@ -102,13 +102,27 @@ Each tab's proxy is isolated through its own Chromium request context.
 
 ## Install
 
-1. Unzip `DualNetDownloader-4.0.0-win-x64.zip` anywhere.
+1. Unzip `DualNetDownloader-4.1.1-win-x64.zip` into a folder (extract the WHOLE zip —
+   don't run the exe from inside the zip viewer).
 2. Run **`DualNet Downloader/DualNet.App.exe`**.
 3. Optional: the first launch extracts uBlock Origin and starts downloading fresh proxies in the
    background.
 
-Requirements: Windows 10/11 x64. If the app fails to start, install the
-[Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe).
+Requirements: Windows 10/11 x64. All runtime dependencies (including the VC++ runtime and
+.NET 8) are bundled — no installer or extra download is needed.
+
+### If the app does not open (v4.1.1 fixes + how to get a useful error)
+
+- **What was broken before v4.1.1:** the release zip was missing `ijwhost.dll` and the
+  VC++ runtime DLLs, and the dark-theme resource file was missing entirely — so on most
+  machines (Windows dark mode) the app died silently before any window appeared. v4.1.1
+  bundles every missing file and no longer fails silently.
+- If a startup error dialog appears, it names the exact problem and saves a full report to
+  `%APPDATA%\DualNet\logs\crash-*.log` — include that file when reporting an issue.
+- If Windows SmartScreen shows "Windows protected your PC" for the downloaded exe, click
+  **More info → Run anyway** (the binary is unsigned).
+- If you extracted only some files, re-extract the full zip; `libcef.dll`, `ijwhost.dll`
+  and the `locales` folder must sit next to `DualNet.App.exe`.
 
 Settings, cookies (per profile), bookmarks, history, sessions and the proxy cache live in
 `%APPDATA%\DualNet`.
