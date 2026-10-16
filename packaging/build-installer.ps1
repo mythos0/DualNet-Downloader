@@ -20,7 +20,9 @@ $out      = Join-Path $repoRoot "out"
 $stage    = Join-Path $repoRoot "out\stage"
 
 Write-Host "== test =="
-dotnet test (Join-Path $repoRoot "tests\DualNet.Tests\DualNet.Tests.csproj") -c Release --nologo
+# CI runners are slow/noisy: skip the 3 timing-sensitive localhost-timing tests there.
+# They keep running in the default (full) suite on Linux/local runs.
+dotnet test (Join-Path $repoRoot "tests\DualNet.Tests\DualNet.Tests.csproj") -c Release --nologo --filter "Category!=TimingSensitive"
 if ($LASTEXITCODE -ne 0) { throw "tests failed" }
 
 Write-Host "== publish win-x64 self-contained =="

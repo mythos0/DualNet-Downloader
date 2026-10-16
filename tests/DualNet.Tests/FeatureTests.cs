@@ -363,6 +363,7 @@ public class FeatureTests
     // ---- 11. queue reorder --------------------------------------------------------------------------------
 
     [Fact]
+    [Trait("Category", "TimingSensitive")]
     public async Task DownloadManager_MoveInQueue_ReordersWaitingJobs()
     {
         // Rare CI hiccup: the loopback listener can drop a connection right after the

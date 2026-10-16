@@ -177,6 +177,7 @@ public class BrowserV4Tests
     }
 
     [Fact]
+    [Trait("Category", "TimingSensitive")]
     public async Task ProxyService_FindsWorkingProxy_ThroughLocalForwardProxy()
     {
         var data = RandomData(64 * 1024);
@@ -210,6 +211,7 @@ public class BrowserV4Tests
     }
 
     [Fact]
+    [Trait("Category", "TimingSensitive")]
     public async Task ProxyService_DeadProxies_AreExcluded()
     {
         var data = RandomData(1024);
