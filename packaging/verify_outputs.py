@@ -69,9 +69,23 @@ def main():
                   f"'DualNet Downloader/' (first 10): {bad_layout[:10]}")
             fail = True
         missing = [r for r in REQUIRED_ZIP if r not in names]
+        # Windows is case-insensitive, so a wrong-cased entry would still RUN —
+        # but normalize anyway (v4.1.2 shipped "Ijwhost.dll" and failed the gate).
         if missing:
-            print("MISSING in zip:", missing)
-            fail = True
+            ci_map = {n.lower(): n for n in names}
+            really_missing, case_fixed = [], []
+            for r in missing:
+                actual = ci_map.get(r.lower())
+                if actual:
+                    case_fixed.append((r, actual))
+                else:
+                    really_missing.append(r)
+            if case_fixed:
+                print("WRONG CASE in zip:", case_fixed)
+                fail = True
+            if really_missing:
+                print("MISSING in zip:", really_missing)
+                fail = True
         else:
             print(f"OK: all {len(REQUIRED_ZIP)} required files present in zip")
         if not any(n.endswith("locales/en-US.pak") for n in z.namelist()):

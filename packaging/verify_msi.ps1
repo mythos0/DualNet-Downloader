@@ -18,8 +18,11 @@ try {
 $installer = New-Object -ComObject WindowsInstaller.Installer
 $database = $installer.GetType().InvokeMember(
     "OpenDatabase", "InvokeMethod", $null, $installer, @($Msi, 0))
+# NOTE: the File table's "File" column is the PRIMARY KEY (e.g. "F0001"), NOT the
+# file name — selecting it makes every publish file look "missing". The file name
+# lives in the "FileName" column as "shortname|longname" for non-8.3 names.
 $view = $database.GetType().InvokeMember(
-    "OpenView", "InvokeMethod", $null, $database, @('SELECT `File` FROM File'))
+    "OpenView", "InvokeMethod", $null, $database, @('SELECT `FileName` FROM File'))
 $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
 
 $msiFiles = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -50,6 +53,7 @@ if ($missing.Count -gt 0) {
 }
 
 Write-Host "OK: MSI File table contains every publish file ($($pubFiles.Count) unique files, $($msiFiles.Count) File rows)"
+exit 0
 
 } catch {
     Write-Host "MSI VERIFY FAILED — unexpected error: $_"

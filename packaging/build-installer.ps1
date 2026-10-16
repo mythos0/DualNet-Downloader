@@ -50,10 +50,17 @@ if (-not $ijw) {
 }
 if (-not $ijw) { throw "ijwhost.dll not found anywhere" }
 $ijwDest = Join-Path $pub "ijwhost.dll"
+# v4.1.2 root cause: dotnet publish already drops the file as "Ijwhost.dll" (capital
+# I) on Windows; a plain Copy-Item then OVERWRITES it keeping the on-disk casing,
+# so the zip ships "Ijwhost.dll" and a case-sensitive gate check fails. Delete the
+# case-variant first, then copy so the canonical lowercase name wins.
+if (Test-Path $ijwDest) { Remove-Item $ijwDest -Force }
 Copy-Item $ijw.FullName $ijwDest -Force
-# Hard verify: the copy MUST land in the publish dir (v4.1.2 taught us this file
-# is life-or-death for CefSharp startup — never trust a silent copy).
+# Hard verify: the copy MUST land in the publish dir with the canonical case
+# (this file is life-or-death for CefSharp startup — never trust a silent copy).
 if (-not (Test-Path $ijwDest) -or (Get-Item $ijwDest).Length -le 0) { throw "ijwhost.dll copy failed -> $ijwDest" }
+$actualName = (Get-ChildItem $pub -Filter "*.dll" | Where-Object { $_.Name -ieq "ijwhost.dll" }).Name
+if ($actualName -cne "ijwhost.dll") { throw "ijwhost.dll landed with wrong case: '$actualName'" }
 Write-Host "bundled: $($ijw.FullName) -> $ijwDest ($((Get-Item $ijwDest).Length) bytes)"
 
 Write-Host "== bundle VC++ runtime DLLs =="
