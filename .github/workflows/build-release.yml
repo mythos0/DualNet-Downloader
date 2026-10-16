@@ -50,9 +50,9 @@ jobs:
       - name: Build zip + MSI (tests included)
         shell: pwsh
         env:
-          VERSION: ${{ steps.tag.outputs.version }}
+          RELEASE_TAG: ${{ steps.tag.outputs.version }}
         run: |
-          $v = $env:VERSION.TrimStart("v")
+          $v = $env:RELEASE_TAG.TrimStart("v")
           & (Join-Path $PWD "packaging\build-installer.ps1") -Version $v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
