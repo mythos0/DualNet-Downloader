@@ -10,7 +10,7 @@ namespace DualNet.Core.Net;
 /// </summary>
 public static class HttpConnectionFactory
 {
-    public const string UserAgent = "DualNetDownloader/4.0 (+dual-network segment downloader)";
+    public const string UserAgent = "DualNetDownloader/4.1 (+dual-network segment downloader)";
 
     private static volatile IWebProxy? _proxyOverride;
 

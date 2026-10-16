@@ -168,7 +168,6 @@ public partial class MainWindow : Window
         {
             if (tab.IsWeb && tab.Host is not null)
             {
-                var browserView = tab.Host.Browser;
                 if (tab.Host.Browser.CleanupElement is null) tab.Host.Browser.CleanupElement = Root;
             }
             _tabViews.TryGetValue(tab.Id, out var existing);
@@ -181,16 +180,85 @@ public partial class MainWindow : Window
                     PageHost.Children.Add(existing);
                 }
             }
+            Visibility vis;
+            if (_vm.IsSplitMode)
+            {
+                // split mode: exactly the two pane tabs are visible
+                bool inSplit = tab == _vm.SplitLeft || tab == _vm.SplitRight;
+                vis = inSplit ? Visibility.Visible : Visibility.Collapsed;
+                if (inSplit && existing is not null)
+                {
+                    int col = tab == _vm.SplitRight ? 2 : 0;
+                    Grid.SetColumn(existing, col);
+                    Grid.SetColumnSpan(existing, 1);
+                }
+            }
+            else
+            {
+                vis = tab.IsActive ? Visibility.Visible : Visibility.Collapsed;
+                if (existing is not null)
+                {
+                    Grid.SetColumn(existing, 0);
+                    Grid.SetColumnSpan(existing, 3);
+                }
+            }
             if (existing is not null)
-                existing.Visibility = tab.IsActive ? Visibility.Visible : Visibility.Collapsed;
+                existing.Visibility = vis;
         }
         // remove views of closed tabs
         foreach (var dead in _tabViews.Keys.Where(id => _vm.Tabs.All(t => t.Id != id)).ToList())
         {
             if (_tabViews.Remove(dead, out var el)) PageHost.Children.Remove(el);
         }
+        ApplySplitLayout();
         SyncNetSelector();
         UpdateProxyBadge();
+    }
+
+    private GridSplitter? _splitter;
+    private Border? _splitDivider;
+
+    /// <summary>Maintains the two-column page layout + divider for split mode.</summary>
+    private void ApplySplitLayout()
+    {
+        if (_vm.IsSplitMode)
+        {
+            PageHost.ColumnDefinitions.Clear();
+            PageHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            PageHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
+            PageHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            if (_splitter is null)
+            {
+                _splitter = new GridSplitter
+                {
+                    Width = 6,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    Background = TryFindResource("BrushBorder") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Transparent,
+                    ResizeBehavior = GridResizeBehavior.PreviousAndNext,
+                    ResizeDirection = GridResizeDirection.Columns,
+                };
+                Grid.SetColumn(_splitter, 1);
+                PageHost.Children.Add(_splitter);
+            }
+            _splitter.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PageHost.ColumnDefinitions.Clear();
+            PageHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (_splitter is not null) _splitter.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private Views.AgentPage? _agentPage;
+
+    private Views.AgentPage CreateAgentPage()
+    {
+        // One shared agent page VM keeps model status/idle manager across visits.
+        _agentPage ??= new Views.AgentPage { DataContext = new AgentViewModel(_vm) };
+        return _agentPage;
     }
 
     private FrameworkElement? CreateViewFor(TabViewModel tab)
@@ -232,6 +300,7 @@ public partial class MainWindow : Window
             "bookmarks" => new Views.BookmarksPage { DataContext = _vm },
             "settings" => new Views.SettingsPage { DataContext = _vm },
             "extensions" => new Views.ExtensionsPage { DataContext = _vm },
+            "agent" => CreateAgentPage(),
             "about" => new Views.AboutPage { DataContext = _vm },
             _ => new Views.NewTabPage { DataContext = _vm },
         };
@@ -516,6 +585,9 @@ public partial class MainWindow : Window
     private void MenuExtensions_Click(object s, RoutedEventArgs e) { MenuPopup.IsOpen = false; _vm.OpenInternalPage(_vm.ActiveTab, "dualnet://app/extensions"); }
     private void MenuSettings_Click(object s, RoutedEventArgs e) { MenuPopup.IsOpen = false; _vm.OpenInternalPage(_vm.ActiveTab, "dualnet://app/settings"); }
     private void MenuAbout_Click(object s, RoutedEventArgs e) { MenuPopup.IsOpen = false; _vm.OpenInternalPage(_vm.ActiveTab, "dualnet://app/about"); }
+    private void MenuAgent_Click(object s, RoutedEventArgs e) { MenuPopup.IsOpen = false; _vm.OpenInternalPage(_vm.ActiveTab, "dualnet://app/agent"); }
+    private void BtnAgent_Click(object s, RoutedEventArgs e) => _vm.OpenInternalPage(_vm.ActiveTab, "dualnet://app/agent");
+    private void MenuSplit_Click(object s, RoutedEventArgs e) { MenuPopup.IsOpen = false; _vm.ToggleSplitView(); }
 
     private void ToggleBookmarksBarCommand_Execute() => _vm.ToggleBookmarksBarCommand.Execute(null);
 
@@ -650,6 +722,8 @@ public partial class MainWindow : Window
             case Key.L when ctrl: Omnibox.Focus(); Omnibox.SelectAll(); e.Handled = true; break;
             case Key.F when ctrl: OpenFind(); e.Handled = true; break;
             case Key.J when ctrl: _vm.OpenInternalPage(_vm.ActiveTab, "dualnet://app/downloads"); e.Handled = true; break;
+            case Key.K when ctrl && shift: _vm.OpenInternalPage(_vm.ActiveTab, "dualnet://app/agent"); e.Handled = true; break;
+            case Key.S when ctrl && shift: _vm.ToggleSplitView(); e.Handled = true; break;
             case Key.R when ctrl: _vm.ReloadCommand.Execute(null); e.Handled = true; break;
             case Key.D when ctrl: _vm.ToggleBookmarkCommand.Execute(null); e.Handled = true; break;
             case Key.F5: _vm.ReloadCommand.Execute(null); e.Handled = true; break;

@@ -160,6 +160,9 @@
                             <ContextMenu/>
                         </Button.ContextMenu>
                     </Button>
+                    <!-- agent -->
+                    <Button x:Name="BtnAgent" Style="{StaticResource ToolButton}" Content="&#x2728;" Click="BtnAgent_Click"
+                            ToolTip="AI agent (Ctrl+Shift+K) — give it a task, it browses for you"/>
                     <!-- downloads -->
                     <Button x:Name="BtnDownloads" Style="{StaticResource ToolButton}" Click="BtnDownloads_Click"
                             ToolTip="Downloads (Ctrl+J)">
@@ -388,6 +391,8 @@
                     <MenuItem Header="Take screenshot   Ctrl+F3" Click="MenuScreenshot_Click"/>
                     <MenuItem Header="Developer tools   F12" Click="MenuDevTools_Click"/>
                     <Separator/>
+                    <MenuItem Header="AI Agent           Ctrl+Shift+K" Click="MenuAgent_Click"/>
+                    <MenuItem Header="Split view         Ctrl+Shift+S" Click="MenuSplit_Click"/>
                     <MenuItem Header="Extensions" Click="MenuExtensions_Click"/>
                     <MenuItem Header="Settings" Click="MenuSettings_Click"/>
                     <MenuItem Header="About DualNet" Click="MenuAbout_Click"/>

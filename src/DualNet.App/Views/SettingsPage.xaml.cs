@@ -35,6 +35,9 @@ public partial class SettingsPage : UserControl
         RestoreCheck.IsChecked = s.RestoreSession;
         ThirdPartyCheck.IsChecked = s.BlockThirdPartyCookies;
         SentryCheck.IsChecked = s.SentryEnabled;
+        OllamaUrlBox.Text = s.OllamaUrl;
+        AgentModelBox.Text = s.AgentModel;
+        IdleUnloadBox.Text = s.AgentIdleUnloadSeconds.ToString();
 
         var nics = new List<NicChoice> { new("all", "Combined (all networks)") };
         nics.AddRange(VM.NicChoices.Where(n => n.Id != "all"));
@@ -154,6 +157,32 @@ public partial class SettingsPage : UserControl
         var enabled = SentryCheck.IsChecked == true;
         AppBootstrapper.SetSetting(s => s.SentryEnabled = enabled);
         SentrySetup.Restart(enabled ? SentrySetup.DefaultDsn : "");
+    }
+
+    // AI Agent
+
+    private void OllamaUrl_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        var url = OllamaUrlBox.Text.Trim();
+        if (url.Length == 0) return;
+        AppBootstrapper.SetSetting(s => s.OllamaUrl = url);
+    }
+
+    private void AgentModel_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        var model = AgentModelBox.Text.Trim();
+        if (model.Length == 0) return;
+        AppBootstrapper.SetSetting(s => s.AgentModel = model);
+    }
+
+    private void IdleUnload_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        if (int.TryParse(IdleUnloadBox.Text, out var v))
+            AppBootstrapper.SetSetting(s => s.AgentIdleUnloadSeconds = Math.Clamp(v, 30, 7200));
+        IdleUnloadBox.Text = AppBootstrapper.Settings.AgentIdleUnloadSeconds.ToString();
     }
 
     private async void TestEvent_Click(object sender, RoutedEventArgs e)

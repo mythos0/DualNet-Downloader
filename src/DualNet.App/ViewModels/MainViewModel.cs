@@ -107,6 +107,47 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool BookmarksBarVisible => AppBootstrapper.Settings.ShowBookmarksBar;
     public bool HasActiveWebTab => ActiveTab?.IsWeb == true;
 
+    // ---------------- split view (side-by-side tabs) --------------------------------------
+
+    private TabViewModel? _splitLeft;
+    private TabViewModel? _splitRight;
+    public TabViewModel? SplitLeft { get => _splitLeft; private set { _splitLeft = value; Changed(nameof(SplitLeft)); } }
+    public TabViewModel? SplitRight { get => _splitRight; private set { _splitRight = value; Changed(nameof(SplitRight)); } }
+
+    private bool _isSplitMode;
+    public bool IsSplitMode
+    {
+        get => _isSplitMode;
+        private set { _isSplitMode = value; Changed(nameof(IsSplitMode)); }
+    }
+
+    /// <summary>Puts two tabs side by side (the agent's "arrange side by side").</summary>
+    public void ArrangeSideBySide(IReadOnlyList<TabViewModel> tabs)
+    {
+        if (tabs.Count == 0) { ExitSplitView(); return; }
+        SplitLeft = tabs[0];
+        SplitRight = tabs.Count > 1 ? tabs[1] : null;
+        IsSplitMode = true;
+        if (ActiveTab != SplitLeft) ActivateTab(SplitLeft);
+        else TabsChanged?.Invoke();
+    }
+
+    public void ToggleSplitView()
+    {
+        if (IsSplitMode) { ExitSplitView(); return; }
+        var i = ActiveTab is null ? 0 : Tabs.IndexOf(ActiveTab);
+        var left = ActiveTab ?? Tabs.FirstOrDefault();
+        var right = Tabs.Where(t => t != left).Skip(i >= Tabs.Count - 1 ? 0 : 0).FirstOrDefault() ?? Tabs.FirstOrDefault(t => t != left);
+        if (left is null) return;
+        ArrangeSideBySide(new List<TabViewModel> { left, right ?? left });
+    }
+
+    public void ExitSplitView()
+    {
+        IsSplitMode = false;
+        TabsChanged?.Invoke();
+    }
+
     public bool IsBookmarked
     {
         get

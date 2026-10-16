@@ -142,6 +142,33 @@
                 </StackPanel>
             </Border>
 
+            <!-- AI Agent -->
+            <Border CornerRadius="10" Background="{DynamicResource BrushCard}" Padding="16" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="AI Agent (local)" Style="{StaticResource SectionTitle}"/>
+                    <Grid Style="{StaticResource Row}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Ollama server URL" Style="{StaticResource Label}"/>
+                        <TextBox x:Name="OllamaUrlBox" Height="28" FontSize="12" VerticalContentAlignment="Center" LostFocus="OllamaUrl_LostFocus"/>
+                    </Grid>
+                    <Grid Style="{StaticResource Row}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Model" Style="{StaticResource Label}"/>
+                        <TextBox x:Name="AgentModelBox" Height="28" FontSize="12" VerticalContentAlignment="Center" LostFocus="AgentModel_LostFocus"/>
+                    </Grid>
+                    <Grid Style="{StaticResource Row}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Unload model after idle (s)" Style="{StaticResource Label}"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBox x:Name="IdleUnloadBox" Width="70" Height="28" FontSize="12" LostFocus="IdleUnload_LostFocus"/>
+                            <TextBlock Style="{StaticResource Hint}" Text=" frees the model's RAM automatically (min 30s)" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                               Text="Get the runtime from ollama.com, then run: ollama pull qwen3.5:2b — everything runs locally; no data leaves your machine."/>
+                </StackPanel>
+            </Border>
+
             <!-- Telemetry -->
             <Border CornerRadius="10" Background="{DynamicResource BrushCard}" Padding="16" Margin="0,0,0,12">
                 <StackPanel>

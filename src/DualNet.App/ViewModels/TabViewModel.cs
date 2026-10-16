@@ -40,6 +40,7 @@ public sealed class TabViewModel : INotifyPropertyChanged
                     "bookmarks" => "Bookmarks",
                     "settings" => "Settings",
                     "extensions" => "Extensions",
+                    "agent" => "AI Agent",
                     "about" => "About",
                     _ => InternalPage,
                 };

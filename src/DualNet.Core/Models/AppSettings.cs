@@ -103,6 +103,17 @@ public sealed class AppSettings
     /// <summary>Send crash reports / events to Sentry (Settings → Telemetry can disable).</summary>
     public bool SentryEnabled { get; set; } = true;
 
+    // ---- v4.1.0 local AI agent ---------------------------------------------------------
+
+    /// <summary>Base URL of the local Ollama server used by the browser automation agent.</summary>
+    public string OllamaUrl { get; set; } = "http://localhost:11434";
+
+    /// <summary>Local model the agent plans with (qwen3.5:2b by default).</summary>
+    public string AgentModel { get; set; } = "qwen3.5:2b";
+
+    /// <summary>Unload the model weights after this many idle seconds (0 = never).</summary>
+    public int AgentIdleUnloadSeconds { get; set; } = 120;
+
     /// <summary>Default download NIC scope per new tab mirrors this app-level default ("all" or adapter id).</summary>
     public string DefaultTabNetScope => string.IsNullOrWhiteSpace(DefaultDownloadScope) ? "all" : DefaultDownloadScope;
 

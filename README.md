@@ -2,11 +2,32 @@
 
 **A full Chromium browser (CEF) with a built-in dual-NIC download manager, per-tab proxies, and uBlock Origin preinstalled.**
 
-> v4.0.0 — full Chromium engine (CefSharp/CEF 138), real Chrome extension support, DuckDuckGo default search,
+> v4.1.0 — full Chromium engine (CefSharp/CEF 138), real Chrome extension support, DuckDuckGo default search,
 > per-tab proxy **and** per-tab network (NIC) selection beside the proxy icon, online free-proxy finder,
-> and the battle-tested DualNet multi-NIC download engine.
+> a **local-AI browser automation agent**, and the battle-tested DualNet multi-NIC download engine.
 
-![downloads](https://img.shields.io/badge/Windows-10%2F11-blue) ![tests](https://img.shields.io/badge/engine_tests-151%2F151-brightgreen)
+![downloads](https://img.shields.io/badge/Windows-10%2F11-blue) ![tests](https://img.shields.io/badge/engine_tests-166%2F166-brightgreen)
+
+## NEW in v4.1: AI browser automation agent (local, private)
+
+Open the sparkle ✨ button (or Ctrl+Shift+K) and give it a task:
+
+- *"Find the official documentation for react, vue and svelte — open them side by side."*
+- *"Compare these three laptops in a table."*
+- *"Download all PDFs from this page."*
+- *"Open my daily work tabs and arrange them side by side."*
+
+The agent plans and acts step-by-step on the real browser (search, navigate, read pages,
+list links, extract tables, queue downloads, open tab sets, split view). It runs a
+**local Ollama model (`qwen3.5:2b` by default)** — nothing leaves your machine.
+
+- **Confirmation-first**: purchases, form submissions, deletions and any direct page
+  interaction pause and ask before running (Approve / Skip / Cancel).
+- **RAM-friendly**: the model is unloaded from memory automatically after idle
+  (default 120 s) and the app's working set is trimmed — "Free RAM now" on the agent page
+  does it instantly. Tune the model, endpoint and idle timeout in Settings → AI Agent.
+- **Results you can use**: extracted tables render as a sortable grid; found links come
+  with Open / Download buttons (downloads flow through the dual-NIC engine).
 
 ## Why v4 is different
 
@@ -75,6 +96,8 @@ Each tab's proxy is isolated through its own Chromium request context.
 | Ctrl + / − / 0 | Zoom |
 | F12 | DevTools |
 | Ctrl+F3 | Screenshot |
+| Ctrl+Shift+K | AI agent |
+| Ctrl+Shift+S | Split view (side-by-side tabs) |
 | Alt+← / Alt+→ | Back / forward |
 
 ## Install
@@ -93,7 +116,7 @@ Settings, cookies (per profile), bookmarks, history, sessions and the proxy cach
 ## Build
 
 ```bash
-dotnet test tests/DualNet.Tests/DualNet.Tests.csproj     # 151 engine tests (Linux-friendly)
+dotnet test tests/DualNet.Tests/DualNet.Tests.csproj     # 166 engine tests (Linux-friendly)
 dotnet publish src/DualNet.App/DualNet.App.csproj -c Release -r win-x64 --self-contained \
   -p:EnableWindowsTargeting=true                          # Windows build (cross-builds from Linux)
 ```
