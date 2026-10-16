@@ -32,9 +32,24 @@ dotnet publish (Join-Path $repoRoot "src\DualNet.App\DualNet.App.csproj") -c Rel
 if ($LASTEXITCODE -ne 0) { throw "publish failed" }
 
 Write-Host "== bundle ijwhost.dll (required for C++/CLI mixed-mode CefSharp) =="
-$ijw = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.netcore.app.host.win-x64" -Recurse -Filter ijwhost.dll |
-       Select-Object -First 1
-if (-not $ijw) { throw "ijwhost.dll not found in nuget cache" }
+# Find ijwhost.dll in: 1) user nuget cache  2) machine-wide dotnet packs  3) NuGet download
+$ijw = $null
+$ijw = Get-ChildItem "$env:USERPROFILE\.nuget\packages\microsoft.netcore.app.host.win-x64" -Recurse -Filter ijwhost.dll -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $ijw) {
+  $ijw = Get-ChildItem "C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64" -Recurse -Filter ijwhost.dll -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+if (-not $ijw) {
+  Write-Host "nuget cache + packs missing it; downloading package..."
+  $nupkg = Join-Path $env:TEMP "hostpack.nupkg"
+  Invoke-WebRequest -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.netcore.app.host.win-x64/8.0.32/microsoft.netcore.app.host.win-x64.8.0.32.nupkg" -OutFile $nupkg
+  $hpDir = Join-Path $env:TEMP "hostpack"
+  if (Test-Path $hpDir) { Remove-Item -Recurse -Force $hpDir }
+  New-Item -ItemType Directory -Path $hpDir | Out-Null
+  Copy-Item $nupkg (Join-Path $hpDir "h.zip") -Force
+  Expand-Archive -Path (Join-Path $hpDir "h.zip") -DestinationPath $hpDir -Force
+  $ijw = Get-ChildItem $hpDir -Recurse -Filter ijwhost.dll | Select-Object -First 1
+}
+if (-not $ijw) { throw "ijwhost.dll not found anywhere" }
 Copy-Item $ijw.FullName (Join-Path $pub "ijwhost.dll")
 Write-Host "bundled: $($ijw.FullName)"
 
